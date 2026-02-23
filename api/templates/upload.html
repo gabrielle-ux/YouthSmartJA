@@ -1,0 +1,81 @@
+<!-- templates/upload.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Resume Upload</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    .card { border: 1px solid #ddd; padding: 16px; border-radius: 10px; }
+    label { display: block; margin-top: 12px; font-weight: 600; }
+    input[type="number"] { width: 100%; padding: 10px; margin-top: 6px; }
+    input[type="file"] { margin-top: 8px; }
+    button { margin-top: 16px; padding: 10px 14px; cursor: pointer; }
+    pre { background: #f6f6f6; padding: 12px; border-radius: 8px; overflow-x: auto; }
+    .ok { color: green; font-weight: 700; }
+    .err { color: crimson; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>Upload Resume (PDF / DOCX)</h1>
+
+  <div class="card">
+    <form id="uploadForm">
+      <label>User ID</label>
+      <input type="number" name="user_id" value="1" min="1" />
+
+      <label>Student ID (optional)</label>
+      <input type="number" name="student_id" placeholder="e.g. 1" />
+
+      <label>Resume File (.pdf or .docx)</label>
+      <input type="file" name="file" accept=".pdf,.docx" required />
+
+      <button type="submit">Upload</button>
+    </form>
+
+    <p id="status"></p>
+    <pre id="output"></pre>
+  </div>
+
+  <script>
+    const form = document.getElementById("uploadForm");
+    const statusEl = document.getElementById("status");
+    const outputEl = document.getElementById("output");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      statusEl.textContent = "Uploading...";
+      statusEl.className = "";
+      outputEl.textContent = "";
+
+      const formData = new FormData(form);
+
+      try {
+        const res = await fetch("/api/resume/upload", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || data.ok === false) {
+          statusEl.textContent = "Upload failed ❌";
+          statusEl.className = "err";
+          outputEl.textContent = JSON.stringify(data, null, 2);
+          return;
+        }
+
+        statusEl.textContent = "Uploaded ✅";
+        statusEl.className = "ok";
+        outputEl.textContent = JSON.stringify(data, null, 2);
+
+      } catch (err) {
+        statusEl.textContent = "Network error ❌";
+        statusEl.className = "err";
+        outputEl.textContent = String(err);
+      }
+    });
+  </script>
+</body>
+</html>
