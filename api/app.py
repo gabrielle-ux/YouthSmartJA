@@ -2,6 +2,8 @@
 # Flask server: upload UI + API endpoint to upload PDF/DOCX resumes
 # After upload, it also returns quick matches based on TF-IDF keyword overlap.
 
+
+
 from flask import Flask, request, jsonify, render_template
 from werkzeug.utils import secure_filename
 
@@ -10,8 +12,10 @@ from resume_tools import (
     extract_text_from_pdf,
     extract_text_from_docx,
     save_resume_to_db,
-    recommend_jobs_by_keyword_overlap,  # ✅ added
+    recommend_jobs_by_keyword_overlap,
 )
+
+from skill_path_tools import recommend_skill_path_for_job
 
 app = Flask(__name__)
 
@@ -24,6 +28,22 @@ def allowed_file(filename: str) -> bool:
         return False
     ext = filename.rsplit(".", 1)[1].lower()
     return ext in ALLOWED_EXTENSIONS
+
+@app.get("/api/jobs/<int:job_id>/skill-path")
+def get_skill_path(job_id):
+    user_id = int(request.args.get("user_id", 1))
+    target_score = float(request.args.get("target_score", 0.85))
+
+    result = recommend_skill_path_for_job(
+        user_id=user_id,
+        job_id=job_id,
+        target_score=target_score
+    )
+
+    return jsonify({
+        "ok": True,
+        "result": result
+    })
 
 
 @app.get("/upload")
@@ -64,8 +84,12 @@ def upload_resume_file():
             "ok": False,
             "error": "Extracted text is empty/too short. If this is a scanned PDF, you’ll need OCR."
         }), 400
+    
 
-    # ✅ save resume
+
+    
+
+
     resume_id, keywords = save_resume_to_db(
         student_id=student_id,
         user_id=user_id,
@@ -73,7 +97,7 @@ def upload_resume_file():
         raw_text=raw_text
     )
 
-    # ✅ quick matches using stored job keywords
+    
     matches = recommend_jobs_by_keyword_overlap(user_id=user_id, limit=10)
 
     return jsonify({
