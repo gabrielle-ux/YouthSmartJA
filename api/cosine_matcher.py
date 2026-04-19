@@ -1,21 +1,24 @@
 # cosine_matcher.py
 
-
-import re
+import os
 import mysql.connector
+from dotenv import load_dotenv
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+from text_cleaning import clean_text, EXTRA_NOISE_WORDS, TECH_NORMALIZATION
+
+load_dotenv()
 
 # -----------------------------
-# DB CONFIG (same as main.py)
+# DB CONFIG
 # -----------------------------
 DB_CONFIG = {
-    "host": "127.0.0.1",
-    "user": "root",
-    "password": "Happy321",
-    "database": "youthsmart",
-    "port": 3306,
+    "host": os.getenv("DB_HOST", "127.0.0.1"),
+    "user": os.getenv("DB_USER", "root"),
+    "password": os.getenv("DB_PASSWORD", ""),
+    "database": os.getenv("DB_NAME", "youthsmart"),
+    "port": int(os.getenv("DB_PORT", 3306)),
 }
 
 
@@ -24,101 +27,158 @@ def get_db():
 
 
 # -----------------------------
-# CLEAN TEXT (reuse logic)
+# DB HELPERS
 # -----------------------------
-def clean_text(s: str) -> str:
-    if not s:
-        return ""
-    s = s.lower()
-    s = re.sub(r"[^a-z0-9\s\+\#\.\-]", " ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
-
-
-# -----------------------------
-# MAIN FUNCTION
-# -----------------------------
-def cosine_match_jobs(user_id: int, limit: int = 10):
-    """
-    Uses TF-IDF + Cosine Similarity to match a user's resume to jobs
-    """
-
+def get_latest_resume_text(user_id: int) -> str:
     db = get_db()
     cur = db.cursor(dictionary=True)
 
-    # -----------------------------
-    # STEP 1: Get latest resume
-    # -----------------------------
-    cur.execute("""
-        SELECT raw_text
-        FROM resumes
-        WHERE user_id=%s
-        ORDER BY id DESC
-        LIMIT 1
-    """, (user_id,))
-
-    resume_row = cur.fetchone()
-
-    if not resume_row:
+    try:
+        cur.execute(
+            """
+            SELECT raw_text
+            FROM resumes
+            WHERE user_id=%s
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+        row = cur.fetchone()
+        return row["raw_text"] if row and row.get("raw_text") else ""
+    finally:
         cur.close()
         db.close()
-        return []
 
-    resume_text = clean_text(resume_row["raw_text"])
 
-    # -----------------------------
-    # STEP 2: Get jobs
-    # -----------------------------
-    cur.execute("""
-        SELECT id, title, company, description,
-               apply_link, salary_text,
-               salary_min, salary_max, salary_currency, salary_period
-        FROM jobs
-        WHERE description IS NOT NULL AND description <> ''
-    """)
+def get_all_jobs():
+    db = get_db()
+    cur = db.cursor(dictionary=True)
 
-    jobs = cur.fetchall()
+    try:
+        cur.execute(
+            """
+            SELECT id, title, company, description,
+                   apply_link, salary_text,
+                   salary_min, salary_max, salary_currency, salary_period
+            FROM jobs
+            WHERE description IS NOT NULL AND description <> ''
+            """
+        )
+        return cur.fetchall()
+    finally:
+        cur.close()
+        db.close()
 
-    cur.close()
-    db.close()
 
-    if not jobs:
-        return []
+def get_job_text(job: dict) -> str:
+    """
+    Build job text for matching.
+    Title gets extra weight by repeating it.
+    Description still matters most.
+    """
+    title = job.get("title", "") or ""
+    description = job.get("description", "") or ""
 
-    # -----------------------------
-    # STEP 3: Prepare documents
-    # -----------------------------
-    job_texts = [clean_text(j["description"]) for j in jobs]
+    # repeat title to give it slightly more importance
+    return f"{title} {title} {description}"
 
-    documents = [resume_text] + job_texts
 
-    # -----------------------------
-    # STEP 4: TF-IDF vectorization
-    # -----------------------------
+def get_job_text_by_id(job_id: int) -> str:
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+
+    try:
+        cur.execute(
+            """
+            SELECT title, description
+            FROM jobs
+            WHERE id=%s
+            LIMIT 1
+            """,
+            (job_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return ""
+        return get_job_text(row)
+    finally:
+        cur.close()
+        db.close()
+
+
+# -----------------------------
+# OPTIONAL SINGLE TEXT COMPARISON
+# -----------------------------
+def compute_tfidf_cosine(text1: str, text2: str) -> float:
+    """
+    Reusable TF-IDF cosine similarity between two texts.
+    Still useful for one-off comparisons.
+    """
+    text1 = clean_text(text1)
+    text2 = clean_text(text2)
+
+    if not text1 or not text2:
+        return 0.0
+
     vectorizer = TfidfVectorizer(
         stop_words="english",
         ngram_range=(1, 2),
-        max_features=5000
+        max_features=3000
     )
 
-    tfidf_matrix = vectorizer.fit_transform(documents)
+    tfidf = vectorizer.fit_transform([text1, text2])
+    score = cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
+    return float(score)
 
-    # -----------------------------
-    # STEP 5: Cosine similarity
-    # -----------------------------
-    resume_vector = tfidf_matrix[0]
+
+# -----------------------------
+# IMPROVED JOB MATCHING
+# -----------------------------
+def cosine_match_jobs(user_id: int, limit: int = 10):
+    """
+    Uses ONE TF-IDF model for:
+    [resume + all jobs]
+    Then compares the resume vector against every job vector.
+    """
+    resume_text = clean_text(get_latest_resume_text(user_id))
+    if not resume_text:
+        return []
+
+    jobs = get_all_jobs()
+    if not jobs:
+        return []
+
+    job_texts = []
+    valid_jobs = []
+
+    for job in jobs:
+        job_text = clean_text(get_job_text(job))
+        if job_text:
+            valid_jobs.append(job)
+            job_texts.append(job_text)
+
+    if not valid_jobs:
+        return []
+
+    corpus = [resume_text] + job_texts
+
+    vectorizer = TfidfVectorizer(
+        stop_words="english",
+        ngram_range=(1, 2),
+        max_features=3000
+    )
+
+    tfidf_matrix = vectorizer.fit_transform(corpus)
+
+    resume_vector = tfidf_matrix[0:1]
     job_vectors = tfidf_matrix[1:]
 
-    similarity_scores = cosine_similarity(resume_vector, job_vectors)[0]
+    scores = cosine_similarity(resume_vector, job_vectors)[0]
 
-    # -----------------------------
-    # STEP 6: Rank jobs
-    # -----------------------------
     results = []
 
-    for i, job in enumerate(jobs):
-        score = float(similarity_scores[i])
-
+    for job, score in zip(valid_jobs, scores):
         if score > 0:
             results.append({
                 "job_id": job["id"],
@@ -130,20 +190,8 @@ def cosine_match_jobs(user_id: int, limit: int = 10):
                 "salary_max": job["salary_max"],
                 "salary_currency": job["salary_currency"],
                 "salary_period": job["salary_period"],
-                "score": round(score, 4)
+                "score": round(float(score), 4)
             })
 
     results.sort(key=lambda x: x["score"], reverse=True)
-
     return results[:limit]
-
-
-# -----------------------------
-# TEST RUN (optional)
-# -----------------------------
-if __name__ == "__main__":
-    user_id = 1  # change to test user
-    matches = cosine_match_jobs(user_id)
-
-    for m in matches:
-        print(f"{m['title']} ({m['company']}) → Score: {m['score']}")
