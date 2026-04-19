@@ -1,14 +1,16 @@
-"""
-YouthSmartJA - Dijkstra-based skill path recommendation (improved)
-"""
-
-
+# skill_path_tools.py
 
 import heapq
 import logging
-import math
-import mysql.connector
 from mysql.connector.pooling import MySQLConnectionPool
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+from cosine_matcher import (
+    clean_text,
+    get_latest_resume_text,
+    get_job_text_by_id,
+)
 
 log = logging.getLogger(__name__)
 
@@ -30,7 +32,6 @@ _pool: MySQLConnectionPool | None = None
 
 
 def _get_pool() -> MySQLConnectionPool:
-    """Lazy-initialise a single module-level connection pool."""
     global _pool
     if _pool is None:
         _pool = MySQLConnectionPool(**DB_CONFIG)
@@ -42,8 +43,7 @@ def get_db():
 
 
 # ---------------------------------------------------------------------------
-# Alias normalisation
-# Maps alternative spellings to the canonical form before any DB or dict lookup.
+# Skill aliases
 # ---------------------------------------------------------------------------
 
 SKILL_ALIASES: dict[str, str] = {
@@ -67,8 +67,6 @@ SKILL_ALIASES: dict[str, str] = {
 
 # ---------------------------------------------------------------------------
 # Hardcoded fallbacks
-# These are only used for skills that aren't found in the DB.
-# The DB is always the primary source — these fill the gaps.
 # ---------------------------------------------------------------------------
 
 _FALLBACK_KNOWN_SKILLS: set[str] = {
@@ -108,10 +106,6 @@ _FALLBACK_SKILL_COST: dict[str, float] = {
 # ---------------------------------------------------------------------------
 
 def _load_known_skills_from_db() -> set[str]:
-    """
-    Pull every distinct skill from the job_skills table.
-    Returns an empty set (triggering fallback) if the table is empty or missing.
-    """
     try:
         db = get_db()
         try:
@@ -129,16 +123,6 @@ def _load_known_skills_from_db() -> set[str]:
 
 
 def _load_skill_costs_from_db() -> dict[str, float]:
-    """
-    Build a skill → difficulty cost mapping from the courses table.
-
-    Uses AVG(duration_hours) as the difficulty proxy. Skills with no matching
-    course fall back to the hardcoded _FALLBACK_SKILL_COST value (or 2.5).
-
-    Requires a `courses` table with at least:
-        skill          VARCHAR   -- the skill the course teaches
-        duration_hours FLOAT     -- how long the course takes to complete
-    """
     try:
         db = get_db()
         try:
@@ -164,32 +148,20 @@ def _load_skill_costs_from_db() -> dict[str, float]:
 
 
 def _build_known_skills() -> set[str]:
-    """Merge DB skills with hardcoded fallback — DB wins on overlap."""
     db_skills = _load_known_skills_from_db()
-    # Always include the fallback set so nothing is lost if the DB is new/empty
     return db_skills | _FALLBACK_KNOWN_SKILLS
 
 
 def _build_skill_cost() -> dict[str, float]:
-    """Merge DB costs with hardcoded fallback — DB wins on overlap."""
     db_costs = _load_skill_costs_from_db()
-    # Start with fallback, then overwrite with real DB values
-    merged = {**_FALLBACK_SKILL_COST, **db_costs}
-    return merged
+    return {**_FALLBACK_SKILL_COST, **db_costs}
 
 
-# Module-level dicts built once at import time.
-# Call refresh_skill_data() to reload without restarting the server.
 KNOWN_SKILLS: set[str] = _build_known_skills()
 SKILL_COST: dict[str, float] = _build_skill_cost()
 
 
 def refresh_skill_data() -> None:
-    """
-    Reload KNOWN_SKILLS and SKILL_COST from the DB.
-    Call this after bulk-importing new jobs or courses so the algorithm
-    picks up the new data without needing a server restart.
-    """
     global KNOWN_SKILLS, SKILL_COST
     KNOWN_SKILLS = _build_known_skills()
     SKILL_COST = _build_skill_cost()
@@ -197,121 +169,70 @@ def refresh_skill_data() -> None:
              len(KNOWN_SKILLS), len(SKILL_COST))
 
 # ---------------------------------------------------------------------------
-# Skill prerequisites
-# A skill should not be recommended before its dependencies are met.
-# Keys are skills; values are sets of skills that must be learned first.
+# Prerequisites
 # ---------------------------------------------------------------------------
 
 PREREQUISITES: dict[str, set[str]] = {
-    "machine learning":  {"python", "statistics"},
-    "deep learning":     {"python", "machine learning"},
-    "nlp":               {"python", "machine learning"},
-    "computer vision":   {"python", "deep learning"},
-    "django":            {"python"},
-    "flask":             {"python"},
-    "fastapi":           {"python"},
-    "react":             {"javascript"},
-    "angular":           {"typescript"},
-    "node":              {"javascript"},
-    "kubernetes":        {"docker"},
-    "terraform":         {"aws"},   # most common pairing
-    "graphql":           {"rest"},
-    "postgresql":        {"sql"},
-    "mysql":             {"sql"},
-    "mongodb":           {"sql"},   # soft prerequisite — understanding of DB concepts
+    "machine learning": {"python", "statistics"},
+    "deep learning": {"python", "machine learning"},
+    "nlp": {"python", "machine learning"},
+    "computer vision": {"python", "deep learning"},
+    "django": {"python"},
+    "flask": {"python"},
+    "fastapi": {"python"},
+    "react": {"javascript"},
+    "angular": {"typescript"},
+    "node": {"javascript"},
+    "kubernetes": {"docker"},
+    "terraform": {"aws"},
+    "graphql": {"rest"},
+    "postgresql": {"sql"},
+    "mysql": {"sql"},
+    "mongodb": {"sql"},
 }
 
-# Number of candidate skills examined at each Dijkstra expansion.
-# Keeps worst-case nodes manageable: O(N × K) rather than O(2^N).
 BEAM_WIDTH = 8
 
+# How many times to repeat a skill word when simulating "learned it".
+# Appending the skill name once to the resume barely nudges the TF-IDF
+# vector (the improvement rounds to 0%). Real resumes mention a skill
+# 2-6 times across summary/skills/experience sections — we use 4 as a
+# realistic mean so the "learning simulation" produces the same signal
+# strength as actually having that skill on a resume.
+SKILL_LEARN_REPEAT = 4
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def normalise_skill(raw: str) -> str:
-    """Lowercase, strip, and resolve aliases."""
     cleaned = raw.strip().lower()
     return SKILL_ALIASES.get(cleaned, cleaned)
 
 
 def normalize_skills(skills: list[str]) -> list[str]:
-    """Deduplicate and sort a skill list."""
     return sorted(set(normalise_skill(s) for s in skills if s and s.strip()))
 
 
-def cosine_similarity(student_skills: list[str], job_skills: list[str]) -> float:
-    """Binary cosine similarity between two skill lists."""
-    student_set = set(student_skills)
-    job_set = set(job_skills)
-    vocab = student_set | job_set
-    if not vocab:
-        return 0.0
-    dot = len(student_set & job_set)
-    mag1 = math.sqrt(len(student_set))
-    mag2 = math.sqrt(len(job_set))
-    if mag1 == 0 or mag2 == 0:
-        return 0.0
-    return dot / (mag1 * mag2)
-
-
 def prerequisites_met(skill: str, current_skills: frozenset[str]) -> bool:
-    """Return True if all prerequisites for `skill` are already in `current_skills`."""
     required = PREREQUISITES.get(skill, set())
     return required.issubset(current_skills)
 
 
 def compute_edge_weight(skill: str, improvement: float) -> float | None:
     """
-    Compute the cost of acquiring `skill`.
-
-    Improvement: how much the cosine score rises after gaining this skill (0–1).
-
-    Old formula:  1 / improvement + difficulty       (improvement term dominates wildly)
-    New formula:  difficulty / (improvement + ε)     (balanced: high difficulty + low gain = expensive)
-
-    Lower weight = Dijkstra will prefer this edge.
+    Lower cost = preferred by Dijkstra.
     """
     if improvement <= 0:
-        return None  # skill provides no score gain — skip it
+        return None
 
     difficulty = SKILL_COST.get(skill, 2.5)
     return difficulty / (improvement + 1e-6)
 
 
-def extract_resume_skills_from_keywords(keywords_csv: str) -> list[str]:
-    """
-    Convert stored resume keywords into a clean, canonical skill list.
-
-    v1 filtered strictly to KNOWN_SKILLS, silently dropping anything else.
-    v2 also resolves aliases before filtering, so "nodejs", "k8s", etc. survive.
-    """
-    if not keywords_csv:
-        return []
-
-    raw = [normalise_skill(k) for k in keywords_csv.split(",") if k.strip()]
-    filtered = [k for k in raw if k in KNOWN_SKILLS]
-    return sorted(set(filtered))
-
-
 # ---------------------------------------------------------------------------
 # Database helpers
 # ---------------------------------------------------------------------------
-
-def get_latest_resume_keywords(user_id: int) -> str:
-    db = get_db()
-    try:
-        cur = db.cursor()
-        cur.execute(
-            "SELECT COALESCE(keywords, '') FROM resumes WHERE user_id=%s ORDER BY id DESC LIMIT 1",
-            (user_id,),
-        )
-        row = cur.fetchone()
-        return row[0] if row else ""
-    finally:
-        db.close()
-
 
 def get_job_skills(job_id: int) -> list[str]:
     db = get_db()
@@ -340,44 +261,146 @@ def get_job_summary(job_id: int) -> dict | None:
 # Core algorithm
 # ---------------------------------------------------------------------------
 
+def skills_already_in_resume(resume_text: str, candidate_skills: list[str]) -> set[str]:
+    """
+    Return the subset of candidate skills that appear to already be on
+    the resume, based on cleaned/tokenized text.
+
+    For multi-word skills ("spring boot", "machine learning"), every
+    token must be present. Uses the same cleaner as the rest of the
+    pipeline so matching is consistent.
+    """
+    if not resume_text or not candidate_skills:
+        return set()
+
+    resume_tokens = set(clean_text(resume_text).split())
+
+    already = set()
+    for skill in candidate_skills:
+        skill_tokens = clean_text(skill).split()
+        if skill_tokens and all(t in resume_tokens for t in skill_tokens):
+            already.add(skill)
+    return already
+
+
+class _PathScorer:
+    """
+    Pre-fits a TF-IDF vectorizer once per request so edge weights in the
+    Dijkstra search are consistent across the entire graph.
+
+    The vocabulary is fixed up-front using [resume + ALL candidate skills]
+    and [job_text] as the two documents. This means:
+
+      * Adding a skill to the resume just changes its term frequencies,
+        not the vocabulary or IDF weights.
+      * scorer.score(skillset) is a pure function of skillset — the same
+        skillset always produces the same score, regardless of where in the
+        search it was evaluated. That's what Dijkstra needs to be correct.
+
+    Replaces hundreds of vectorizer.fit_transform() calls per request
+    with one fit + N cheap transforms.
+    """
+
+    def __init__(self, resume_text: str, job_text: str, candidate_skills: list[str]):
+        self.resume_clean = clean_text(resume_text)
+        self.job_clean = clean_text(job_text)
+        self.skills = list(candidate_skills)
+
+        # Fit vocabulary once on a superset of everything we might score.
+        # Putting all skill tokens in the "resume side" document guarantees
+        # every skill has a column in the TF-IDF matrix, so transforming
+        # (resume + any subset of skills) later stays inside the vocabulary.
+        superset_doc = (self.resume_clean + " " + " ".join(self.skills)).strip()
+        corpus = [superset_doc, self.job_clean]
+
+        self.vectorizer = TfidfVectorizer(
+            stop_words="english",
+            ngram_range=(1, 2),
+            max_features=3000,
+        )
+
+        # Fit on the superset so the vocabulary is frozen for the whole search.
+        self.vectorizer.fit(corpus)
+        self.job_vec = self.vectorizer.transform([self.job_clean])
+
+    def score(self, skillset) -> float:
+        """
+        Cosine similarity between (resume + given skillset) and the job text.
+        Uses the pre-fit vocabulary — no refitting.
+
+        Each skill is repeated SKILL_LEARN_REPEAT times so its term frequency
+        in the document reflects how often a real resume mentions a skill
+        (typically 2-6x across summary/skills/experience). Repeating once
+        produced improvements that rounded to 0% and made the whole path
+        look flat.
+        """
+        if not self.resume_clean or not self.job_clean:
+            return 0.0
+
+        if skillset:
+            # Each skill appears SKILL_LEARN_REPEAT times so "learning" a
+            # skill matches the signal strength of actually having it.
+            added = " ".join(
+                s for s in sorted(skillset)
+                for _ in range(SKILL_LEARN_REPEAT)
+            )
+            doc = (self.resume_clean + " " + added).strip()
+        else:
+            doc = self.resume_clean
+
+        vec = self.vectorizer.transform([doc])
+        return float(cosine_similarity(vec, self.job_vec)[0][0])
+
+
 def dijkstra_skill_path(
-    student_skills: list[str],
-    job_skills: list[str],
-    target_score: float = 0.85,
+    resume_text: str,
+    job_text: str,
+    candidate_skills: list[str],
+    target_score: float = 0.30,
     beam_width: int = BEAM_WIDTH,
 ) -> dict:
     """
-    Find the lowest-cost sequence of skills to learn in order to raise the
-    student's cosine similarity score against a job description.
+    Uses TF-IDF cosine score as the main objective.
+    Each step simulates learning a skill by appending that skill to the resume text.
 
-    Returns a dict with:
-        start_score  – initial match percentage (0–100)
-        final_score  – achieved match percentage after following the path
-        path         – ordered list of skill-learning steps
-        missing_skills – skills in the job not currently held by the student
-        reached_target – whether the target score was hit
+    Skills that already appear on the resume are filtered out before the
+    search so the algorithm only considers skills the user genuinely needs
+    to acquire. Those already-held skills are returned separately as
+    `already_have` so the frontend can show "you have X of Y required skills".
     """
-    student_skills = normalize_skills(student_skills)
-    job_skills = normalize_skills(job_skills)
-    required_skill_set = set(job_skills)
+    resume_text = resume_text or ""
+    job_text = job_text or ""
+    candidate_skills = normalize_skills(candidate_skills)
 
-    if not job_skills:
+    if not job_text.strip():
         return {
-            "start_score": 0, "final_score": 0,
-            "path": [], "missing_skills": [], "reached_target": True,
+            "start_score": 0,
+            "final_score": 0,
+            "path": [],
+            "missing_skills": [],
+            "already_have": [],
+            "reached_target": False,
         }
 
-    start_score = cosine_similarity(student_skills, job_skills)
-    missing_skills = [s for s in job_skills if s not in student_skills]
+    # Only search over skills the user doesn't already have.
+    already_have = skills_already_in_resume(resume_text, candidate_skills)
+    skills_to_search = [s for s in candidate_skills if s not in already_have]
 
-    if start_score >= target_score or not missing_skills:
+    scorer = _PathScorer(resume_text, job_text, skills_to_search)
+
+    start_score = scorer.score(frozenset())
+
+    if start_score >= target_score or not skills_to_search:
         return {
             "start_score": round(start_score * 100),
             "final_score": round(start_score * 100),
-            "path": [], "missing_skills": missing_skills, "reached_target": True,
+            "path": [],
+            "missing_skills": skills_to_search,
+            "already_have": sorted(already_have),
+            "reached_target": start_score >= target_score,
         }
 
-    start_node = frozenset(student_skills)
+    start_node = frozenset()
     dist: dict[frozenset, float] = {start_node: 0.0}
     prev: dict[frozenset, dict | None] = {start_node: None}
 
@@ -395,33 +418,30 @@ def dijkstra_skill_path(
             continue
         visited.add(current_node)
 
-        current_score = cosine_similarity(list(current_node), job_skills)
+        current_score = scorer.score(current_node)
 
-        if current_score >= target_score or required_skill_set.issubset(current_node):
+        if current_score >= target_score:
             best_goal_node = current_node
             break
 
-        remaining = [s for s in job_skills if s not in current_node]
+        remaining = [s for s in skills_to_search if s not in current_node]
 
-        # --- IMPROVEMENT: prune to top-K candidates by potential improvement ---
-        # Score each remaining skill and keep only the most promising ones.
-        # This caps expansions at beam_width per node instead of all N remainders.
         candidates_scored = []
         for skill in remaining:
             if not prerequisites_met(skill, current_node):
-                continue  # honour prerequisite ordering
-            next_skills = list(current_node | {skill})
-            improvement = cosine_similarity(next_skills, job_skills) - current_score
-            if improvement > 0:
-                candidates_scored.append((skill, improvement))
+                continue
 
-        # Sort descending by improvement, keep top beam_width
+            next_score = scorer.score(current_node | {skill})
+            improvement = next_score - current_score
+
+            if improvement > 0:
+                candidates_scored.append((skill, improvement, next_score))
+
         candidates_scored.sort(key=lambda x: x[1], reverse=True)
         candidates = candidates_scored[:beam_width]
 
-        for skill, improvement in candidates:
-            next_node = frozenset(current_node | {skill})
-            score_after = current_score + improvement
+        for skill, improvement, score_after in candidates:
+            next_node = frozenset(set(current_node) | {skill})
 
             edge_weight = compute_edge_weight(skill, improvement)
             if edge_weight is None:
@@ -443,35 +463,23 @@ def dijkstra_skill_path(
                 counter += 1
                 heapq.heappush(pq, (new_cost, counter, next_node))
 
-    # --- IMPROVEMENT: smarter fallback ---
-    # If we never hit the target, find the best explored node
-    # (most skills covered, lowest cost as tiebreak) instead of giving up.
-    if best_goal_node is None:
-        candidates_with_full_cover = [
-            node for node in dist if required_skill_set.issubset(node)
-        ]
-        if candidates_with_full_cover:
-            best_goal_node = min(candidates_with_full_cover, key=lambda n: dist[n])
-        elif dist:
-            # Partial fallback: the explored node with the highest cosine score
-            best_goal_node = max(
-                dist.keys(),
-                key=lambda n: (cosine_similarity(list(n), job_skills), -dist[n]),
-            )
-            log.warning(
-                "Target score %.0f%% not reachable with current skill graph. "
-                "Returning best partial path.",
-                target_score * 100,
-            )
+    if best_goal_node is None and dist:
+        best_goal_node = max(
+            dist.keys(),
+            key=lambda n: (scorer.score(n), -dist[n]),
+        )
+        log.warning("Target score not reached. Returning best partial path.")
 
     if best_goal_node is None:
         return {
             "start_score": round(start_score * 100),
             "final_score": round(start_score * 100),
-            "path": [], "missing_skills": missing_skills, "reached_target": False,
+            "path": [],
+            "missing_skills": skills_to_search,
+            "already_have": sorted(already_have),
+            "reached_target": False,
         }
 
-    # Reconstruct path
     path = []
     node = best_goal_node
     while prev.get(node) is not None:
@@ -487,15 +495,18 @@ def dijkstra_skill_path(
 
     path.reverse()
 
-    final_score = round(cosine_similarity(list(best_goal_node), job_skills) * 100)
-    reached = final_score >= round(target_score * 100)
+    final_score = round(scorer.score(best_goal_node) * 100)
+
+    learned_skills = set(best_goal_node)
+    missing_skills = [s for s in skills_to_search if s not in learned_skills]
 
     return {
         "start_score": round(start_score * 100),
         "final_score": final_score,
         "path": path,
         "missing_skills": missing_skills,
-        "reached_target": reached,
+        "already_have": sorted(already_have),
+        "reached_target": final_score >= round(target_score * 100),
     }
 
 
@@ -506,25 +517,41 @@ def dijkstra_skill_path(
 def recommend_skill_path_for_job(
     user_id: int,
     job_id: int,
-    target_score: float = 0.85,
+    target_score: float = 0.30,
 ) -> dict:
     """
-    Full pipeline: load resume + job skills from DB, run Dijkstra, return result.
+    Full pipeline:
+    - load latest resume raw text
+    - load job text
+    - load job skills as candidate skills
+    - use TF-IDF cosine as the dominant score
     """
-    resume_keywords = get_latest_resume_keywords(user_id)
-    student_skills = extract_resume_skills_from_keywords(resume_keywords)
+    resume_text = get_latest_resume_text(user_id)
+    job_text = get_job_text_by_id(job_id)
     job_skills = get_job_skills(job_id)
     job = get_job_summary(job_id)
 
     result = dijkstra_skill_path(
-        student_skills=student_skills,
-        job_skills=job_skills,
+        resume_text=resume_text,
+        job_text=job_text,
+        candidate_skills=job_skills,
         target_score=target_score,
     )
 
     return {
         "job": job,
-        "student_skills": student_skills,
-        "job_skills": job_skills,
+        "candidate_skills": job_skills,
         **result,
     }
+
+
+# ---------------------------------------------------------------------------
+# Test run
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    user_id = 1
+    job_id = 1
+
+    result = recommend_skill_path_for_job(user_id=user_id, job_id=job_id, target_score=0.85)
+    print(result)
