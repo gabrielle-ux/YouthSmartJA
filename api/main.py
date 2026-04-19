@@ -58,7 +58,7 @@ DB_CONFIG = {
 }
 
 HEADERS = {
-    "x-rapidapi-key": "",
+    "x-rapidapi-key": "a40f668125msh607e60737cc3d96p1d1220jsn6475fb023e24",
     "x-rapidapi-host": "jsearch.p.rapidapi.com",
 }
 
