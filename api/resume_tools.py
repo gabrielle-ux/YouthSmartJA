@@ -1,11 +1,11 @@
-
 # Resume file parsing + keyword extraction + DB insert + quick matching against stored job keywords
 
-import re
 import mysql.connector
 from sklearn.feature_extraction.text import TfidfVectorizer
 from pypdf import PdfReader
 from docx import Document
+
+from text_cleaning import clean_text, EXTRA_NOISE_WORDS, TECH_NORMALIZATION
 
 DB_CONFIG = {
     "host": "127.0.0.1",
@@ -22,29 +22,50 @@ def get_db():
     return mysql.connector.connect(**DB_CONFIG)
 
 
-def clean_text(s: str) -> str:
-    if not s:
-        return ""
-    s = s.lower()
-    s = re.sub(r"[^a-z0-9\s\+\#\.\-]", " ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
-
-
 def extract_keywords_single_doc(text: str, top_n: int = 40):
     """
-    Keyword extraction for ONE resume doc 
+    Keyword extraction for ONE resume doc
     """
     text = clean_text(text)
     if not text:
         return []
-    vec = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), max_features=3000)
+
+    vec = TfidfVectorizer(
+        stop_words="english",
+        ngram_range=(1, 2),
+        max_features=3000
+    )
+
     X = vec.fit_transform([text])
     terms = vec.get_feature_names_out()
     scores = X.toarray()[0]
+
     pairs = list(zip(terms, scores))
     pairs.sort(key=lambda x: x[1], reverse=True)
-    return [w for (w, sc) in pairs[:top_n] if sc > 0]
+
+    keywords = []
+
+    for term, score in pairs:
+        if score <= 0:
+            continue
+
+        term = term.strip()
+        if not term:
+            continue
+
+        parts = term.split()
+        if all(part in EXTRA_NOISE_WORDS for part in parts):
+            continue
+
+        if term in keywords:
+            continue
+
+        keywords.append(term)
+
+        if len(keywords) >= top_n:
+            break
+
+    return keywords
 
 
 def extract_text_from_pdf(file_obj) -> str:
