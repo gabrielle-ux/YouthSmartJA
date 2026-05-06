@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 DB_CONFIG = {
     "host": "127.0.0.1",
     "user": "root",
-    "password": "Happy321",
+    "password": "",
     "database": "youthsmart",
     "port": 3306,
     "pool_name": "ysja_pool",

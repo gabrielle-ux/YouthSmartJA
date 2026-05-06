@@ -10,6 +10,7 @@ from flask_jwt_extended import JWTManager, get_jwt_identity
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
+from searchjobs import jobs_bp
 
 from resume_tools import (
     ALLOWED_EXTENSIONS,
@@ -21,6 +22,7 @@ from resume_tools import (
 from cosine_matcher import cosine_match_jobs
 from skill_path_tools import recommend_skill_path_for_job
 from auth import auth_bp, is_token_revoked, roles_required
+
 
 load_dotenv()
 
@@ -50,7 +52,7 @@ def check_if_token_revoked(jwt_header, jwt_payload):
 # Register Blueprints
 # ---------------------------------------------------------------------------
 app.register_blueprint(auth_bp)
-
+app.register_blueprint(jobs_bp)
 # ---------------------------------------------------------------------------
 # Upload Config
 # ---------------------------------------------------------------------------
@@ -63,6 +65,15 @@ def allowed_file(filename: str) -> bool:
         return False
     ext = filename.rsplit(".", 1)[1].lower()
     return ext in ALLOWED_EXTENSIONS
+
+def get_db():
+    return mysql.connector.connect(
+        host=os.getenv("DB_HOST", "127.0.0.1"),
+        user=os.getenv("DB_USER", "root"),
+        password=os.getenv("DB_PASSWORD", ""),
+        database=os.getenv("DB_NAME", "youthsmart"),
+        port=int(os.getenv("DB_PORT", 3306)),
+    )
 
 
 # ---------------------------------------------------------------------------
