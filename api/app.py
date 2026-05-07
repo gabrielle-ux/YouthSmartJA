@@ -3,14 +3,15 @@
 # After upload, it also returns quick matches based on TF-IDF cosine similarity.
 
 import os
+import requests
 from datetime import timedelta
+from searchjobs import jobs_bp
 
 from flask import Flask, request, jsonify, render_template
 from flask_jwt_extended import JWTManager, get_jwt_identity
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
-from searchjobs import jobs_bp
 
 from resume_tools import (
     ALLOWED_EXTENSIONS,
@@ -23,8 +24,21 @@ from cosine_matcher import cosine_match_jobs
 from skill_path_tools import recommend_skill_path_for_job
 from auth import auth_bp, is_token_revoked, roles_required
 
+from bookmark_tools import (
+    save_bookmark,
+    get_user_bookmarks,
+    delete_bookmark,
+)
 
 load_dotenv()
+
+# ---------------------------------------------------------------------------
+# n8n Webhook URL
+# ---------------------------------------------------------------------------
+N8N_WEBHOOK_URL = os.getenv(
+    "N8N_WEBHOOK_URL",
+    "http://localhost:5678/webhook-test/100fbd70-b636-4445-93de-6c98f4540346"
+)
 
 app = Flask(__name__)
 
@@ -48,11 +62,13 @@ jwt = JWTManager(app)
 def check_if_token_revoked(jwt_header, jwt_payload):
     return is_token_revoked(jwt_payload["jti"])
 
+
 # ---------------------------------------------------------------------------
 # Register Blueprints
 # ---------------------------------------------------------------------------
 app.register_blueprint(auth_bp)
 app.register_blueprint(jobs_bp)
+
 # ---------------------------------------------------------------------------
 # Upload Config
 # ---------------------------------------------------------------------------
@@ -65,15 +81,6 @@ def allowed_file(filename: str) -> bool:
         return False
     ext = filename.rsplit(".", 1)[1].lower()
     return ext in ALLOWED_EXTENSIONS
-
-def get_db():
-    return mysql.connector.connect(
-        host=os.getenv("DB_HOST", "127.0.0.1"),
-        user=os.getenv("DB_USER", "root"),
-        password=os.getenv("DB_PASSWORD", ""),
-        database=os.getenv("DB_NAME", "youthsmart"),
-        port=int(os.getenv("DB_PORT", 3306)),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -93,16 +100,102 @@ def upload_page():
 
 
 # ---------------------------------------------------------------------------
+# Job Matches Feed — students/admin only
+# ---------------------------------------------------------------------------
+@app.get("/api/jobs/matches")
+@roles_required("student", "admin")
+def get_job_matches():
+    user_id = int(get_jwt_identity())
+
+    matches = cosine_match_jobs(user_id=user_id, limit=10)
+
+    return jsonify({
+        "ok": True,
+        "matches": matches
+    })
+
+
+# ---------------------------------------------------------------------------
+# Save Bookmark — students/admin only
+# ---------------------------------------------------------------------------
+@app.post("/api/bookmarks")
+@roles_required("student", "admin")
+def create_bookmark():
+    user_id = int(get_jwt_identity())
+
+    data = request.get_json() or {}
+
+    job_id = data.get("job_id")
+    match_score = data.get("match_score", 0)
+    pref_score = data.get("preference_score", 0)
+    final_score = data.get("final_score", 0)
+
+    if not job_id:
+        return jsonify({
+            "ok": False,
+            "error": "job_id is required"
+        }), 400
+
+    save_bookmark(
+        user_id=user_id,
+        job_id=job_id,
+        match_score=match_score,
+        pref_score=pref_score,
+        final_score=final_score
+    )
+
+    return jsonify({
+        "ok": True,
+        "message": "Bookmark saved"
+    })
+
+
+# ---------------------------------------------------------------------------
+# Get Bookmarks — students/admin only
+# ---------------------------------------------------------------------------
+@app.get("/api/bookmarks")
+@roles_required("student", "admin")
+def get_bookmarks():
+    user_id = int(get_jwt_identity())
+
+    bookmarks = get_user_bookmarks(user_id)
+
+    return jsonify({
+        "ok": True,
+        "bookmarks": bookmarks
+    })
+
+
+# ---------------------------------------------------------------------------
+# Delete Bookmark — students/admin only
+# ---------------------------------------------------------------------------
+@app.delete("/api/bookmarks/<int:job_id>")
+@roles_required("student", "admin")
+def remove_bookmark(job_id):
+    user_id = int(get_jwt_identity())
+
+    deleted = delete_bookmark(user_id, job_id)
+
+    if deleted == 0:
+        return jsonify({
+            "ok": False,
+            "error": "Bookmark not found"
+        }), 404
+
+    return jsonify({
+        "ok": True,
+        "message": "Bookmark deleted"
+    })
+
+
+# ---------------------------------------------------------------------------
 # Skill Path — students/admin only
 # ---------------------------------------------------------------------------
 @app.get("/api/jobs/<int:job_id>/skill-path")
 @roles_required("student", "admin")
 def get_skill_path(job_id):
     user_id = int(get_jwt_identity())
-    # Default target of 0.30 is calibrated for TF-IDF cosine on raw
-    # resume/job text, which caps out around 0.30-0.40 for even the
-    # best matches. The old default of 0.85 was aspirationally wrong
-    # and meant reached_target was effectively always false.
+
     target_score = float(request.args.get("target_score", 0.30))
 
     result = recommend_skill_path_for_job(
@@ -114,6 +207,79 @@ def get_skill_path(job_id):
     return jsonify({
         "ok": True,
         "result": result
+    })
+
+
+# ---------------------------------------------------------------------------
+# Guidance Courses — students/admin only
+# Combines Dijkstra skill path + n8n learning recommendations
+# ---------------------------------------------------------------------------
+@app.get("/api/jobs/<int:job_id>/guidance-courses")
+@roles_required("student", "admin")
+def get_guidance_courses(job_id):
+    user_id = int(get_jwt_identity())
+
+    target_score = float(request.args.get("target_score", 0.30))
+
+    # 1. Generate skill path
+    skill_path_result = recommend_skill_path_for_job(
+        user_id=user_id,
+        job_id=job_id,
+        target_score=target_score
+    )
+
+    # 2. Extract skills from path
+    skills = [
+        step["learn"]
+        for step in skill_path_result.get("path", [])
+        if step.get("learn")
+    ]
+
+    # fallback to missing_skills if path empty
+    if not skills:
+        skills = skill_path_result.get("missing_skills", [])
+
+    # 3. No missing skills
+    if not skills:
+        return jsonify({
+            "ok": True,
+            "message": "No missing skills found for this job.",
+            "skill_path": skill_path_result,
+            "n8n": {
+                "ok": True,
+                "recommendations": []
+            }
+        })
+
+    # 4. Send to n8n
+    try:
+        n8n_response = requests.post(
+            N8N_WEBHOOK_URL,
+            json={
+                "user_id": user_id,
+                "job_id": job_id,
+                "skills": skills
+            },
+            timeout=15
+        )
+
+        n8n_response.raise_for_status()
+
+        n8n_data = n8n_response.json()
+
+    except requests.RequestException as exc:
+        return jsonify({
+            "ok": False,
+            "error": "Failed to connect to n8n workflow.",
+            "details": str(exc),
+            "skill_path": skill_path_result
+        }), 502
+
+    # 5. Combined response
+    return jsonify({
+        "ok": True,
+        "skill_path": skill_path_result,
+        "n8n": n8n_data
     })
 
 
