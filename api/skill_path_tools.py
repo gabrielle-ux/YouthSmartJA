@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 DB_CONFIG = {
     "host": "127.0.0.1",
     "user": "root",
-    "password": "",
+    "password": "Happy321",
     "database": "youthsmart",
     "port": 3306,
     "pool_name": "ysja_pool",
@@ -63,6 +63,8 @@ SKILL_ALIASES: dict[str, str] = {
     "powerbi": "power bi",
     "ms office": "microsoft office",
     "office": "microsoft office",
+    "ai imaging": "ai",
+    "artificial intelligence": "ai",
 }
 
 # ---------------------------------------------------------------------------
@@ -72,33 +74,80 @@ SKILL_ALIASES: dict[str, str] = {
 _FALLBACK_KNOWN_SKILLS: set[str] = {
     "python", "java", "javascript", "typescript", "c++", "c#", "ruby", "go", "swift", "kotlin", "r",
     "react", "vue", "angular", "node", "flask", "django", "fastapi", "html", "css",
-    "sql", "mysql", "postgresql", "mongodb", "redis", "elasticsearch",
-    "excel", "tableau", "power bi", "statistics", "data visualization",
-    "machine learning", "deep learning", "nlp", "computer vision",
+    "spring", "spring boot", "backend", "frontend", "full stack", "software engineering",
+    "sql", "mysql", "postgresql", "mongodb", "redis", "elasticsearch", "database", "database design",
+    "excel", "tableau", "power bi", "statistics", "data visualization", "data analysis",
+    "machine learning", "deep learning", "nlp", "computer vision", "image processing", "ai",
     "docker", "kubernetes", "aws", "azure", "gcp", "git", "linux", "terraform",
-    "rest", "graphql", "grpc",
+    "rest", "rest api", "graphql", "grpc", "api", "microservices",
     "communication", "customer service", "project management", "leadership", "teamwork",
-    "problem solving", "critical thinking", "time management", "public speaking",
+    "problem solving", "critical thinking", "time management", "public speaking", "attention to detail",
     "accounting", "financial analysis", "microsoft office",
 }
 
 _FALLBACK_SKILL_COST: dict[str, float] = {
     "communication": 1.0, "teamwork": 1.0, "time management": 1.0,
     "excel": 1.2, "microsoft office": 1.2,
-    "git": 1.5, "html": 1.5, "css": 1.5, "customer service": 1.5, "rest": 1.5,
+    "git": 1.5, "html": 1.5, "css": 1.5, "customer service": 1.5,
+    "rest": 1.5, "rest api": 1.5, "api": 1.5,
     "public speaking": 1.8,
     "leadership": 2.0, "problem solving": 2.0, "critical thinking": 2.0,
-    "project management": 2.0, "sql": 2.0, "mysql": 2.0, "linux": 2.0,
+    "attention to detail": 2.0, "project management": 2.0,
+    "sql": 2.0, "mysql": 2.0, "linux": 2.0,
     "javascript": 2.5, "typescript": 2.5, "tableau": 2.5, "power bi": 2.5,
-    "data visualization": 2.5, "graphql": 2.5, "flask": 2.5, "vue": 2.5,
+    "data visualization": 2.5, "data analysis": 2.5,
+    "graphql": 2.5, "flask": 2.5, "vue": 2.5,
     "mongodb": 2.5, "redis": 2.5,
+    "backend": 2.5, "frontend": 2.5, "database": 2.5, "database design": 2.5,
     "python": 3.0, "java": 3.0, "go": 3.0, "statistics": 3.0, "postgresql": 3.0,
     "react": 3.0, "angular": 3.0, "node": 3.0, "django": 3.0, "fastapi": 2.8,
+    "spring": 3.0, "spring boot": 3.2, "microservices": 3.2,
     "r": 3.0, "elasticsearch": 3.0, "c#": 3.5, "ruby": 3.0, "swift": 3.5,
     "kotlin": 3.5, "docker": 3.5,
     "aws": 4.0, "azure": 4.0, "gcp": 4.0, "terraform": 4.0, "c++": 4.0,
     "financial analysis": 3.5, "accounting": 3.5, "kubernetes": 4.5,
-    "machine learning": 5.0, "nlp": 5.0, "computer vision": 5.5, "deep learning": 6.0,
+    "ai": 4.5, "machine learning": 5.0, "nlp": 5.0,
+    "computer vision": 5.5, "image processing": 5.0, "deep learning": 6.0,
+}
+
+# ---------------------------------------------------------------------------
+# Skill priority groups
+# ---------------------------------------------------------------------------
+
+TECHNICAL_SKILLS: set[str] = {
+    "python", "java", "javascript", "typescript",
+    "react", "vue", "angular", "node",
+    "flask", "django", "fastapi", "spring", "spring boot",
+    "api", "rest", "rest api", "graphql",
+    "backend", "frontend", "full stack", "software engineering",
+    "microservices",
+    "sql", "mysql", "postgresql", "mongodb",
+    "database", "database design",
+    "git", "docker", "kubernetes",
+    "aws", "azure", "gcp", "linux",
+    "ai", "machine learning", "deep learning",
+    "computer vision", "image processing",
+    "data analysis", "statistics",
+}
+
+SOFT_SKILLS: set[str] = {
+    "communication", "teamwork", "leadership",
+    "problem solving", "critical thinking",
+    "time management", "attention to detail",
+    "organization", "adaptability", "professionalism",
+}
+
+IRRELEVANT_SOFTWARE_SKILLS: set[str] = {
+    "retail", "cashier", "food service", "bartending",
+    "housekeeping", "front desk", "guest service",
+    "tourism", "hospitality",
+}
+
+SOFTWARE_CONTEXT_TERMS: set[str] = {
+    "developer", "software", "engineer", "backend",
+    "frontend", "full stack", "java", "python",
+    "api", "database", "spring", "react", "javascript",
+    "microservices", "ai", "machine learning",
 }
 
 # ---------------------------------------------------------------------------
@@ -165,8 +214,12 @@ def refresh_skill_data() -> None:
     global KNOWN_SKILLS, SKILL_COST
     KNOWN_SKILLS = _build_known_skills()
     SKILL_COST = _build_skill_cost()
-    log.info("Skill data refreshed. %d known skills, %d with cost data.",
-             len(KNOWN_SKILLS), len(SKILL_COST))
+    log.info(
+        "Skill data refreshed. %d known skills, %d with cost data.",
+        len(KNOWN_SKILLS),
+        len(SKILL_COST),
+    )
+
 
 # ---------------------------------------------------------------------------
 # Prerequisites
@@ -177,9 +230,12 @@ PREREQUISITES: dict[str, set[str]] = {
     "deep learning": {"python", "machine learning"},
     "nlp": {"python", "machine learning"},
     "computer vision": {"python", "deep learning"},
+    "image processing": {"python"},
     "django": {"python"},
     "flask": {"python"},
     "fastapi": {"python"},
+    "spring": {"java"},
+    "spring boot": {"java"},
     "react": {"javascript"},
     "angular": {"typescript"},
     "node": {"javascript"},
@@ -192,14 +248,12 @@ PREREQUISITES: dict[str, set[str]] = {
 }
 
 BEAM_WIDTH = 8
-
-# How many times to repeat a skill word when simulating "learned it".
-# Appending the skill name once to the resume barely nudges the TF-IDF
-# vector (the improvement rounds to 0%). Real resumes mention a skill
-# 2-6 times across summary/skills/experience sections — we use 4 as a
-# realistic mean so the "learning simulation" produces the same signal
-# strength as actually having that skill on a resume.
 SKILL_LEARN_REPEAT = 4
+
+# Minimum cosine improvement required before a skill is accepted.
+# This prevents tiny improvements like 0.0002 from entering the path.
+MIN_IMPROVEMENT_THRESHOLD = 0.01
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -219,15 +273,60 @@ def prerequisites_met(skill: str, current_skills: frozenset[str]) -> bool:
     return required.issubset(current_skills)
 
 
-def compute_edge_weight(skill: str, improvement: float) -> float | None:
+def is_software_context(job_text: str) -> bool:
+    job_clean = clean_text(job_text)
+    return any(term in job_clean for term in SOFTWARE_CONTEXT_TERMS)
+
+
+def filter_candidate_skills_for_context(candidate_skills: list[str], job_text: str) -> list[str]:
+    """
+    Removes clearly irrelevant skills for software/technical jobs.
+    Example: retail should not be recommended for Java backend roles.
+    """
+    if not is_software_context(job_text):
+        return candidate_skills
+
+    return [
+        skill for skill in candidate_skills
+        if skill not in IRRELEVANT_SOFTWARE_SKILLS
+    ]
+
+
+def get_skill_priority(skill: str, job_text: str = "") -> float:
+    """
+    Lower multiplier = preferred by Dijkstra.
+    Higher multiplier = less preferred.
+    """
+    skill = normalise_skill(skill)
+
+    if is_software_context(job_text) and skill in IRRELEVANT_SOFTWARE_SKILLS:
+        return 10.0
+
+    if skill in TECHNICAL_SKILLS:
+        return 0.65
+
+    if skill in SOFT_SKILLS:
+        return 5.0
+
+    return 1.0
+
+
+def compute_edge_weight(skill: str, improvement: float, job_text: str = "") -> float | None:
     """
     Lower cost = preferred by Dijkstra.
+
+    Combines:
+    - base learning difficulty
+    - cosine improvement
+    - skill priority/type
     """
-    if improvement <= 0:
+    if improvement < MIN_IMPROVEMENT_THRESHOLD:
         return None
 
     difficulty = SKILL_COST.get(skill, 2.5)
-    return difficulty / (improvement + 1e-6)
+    priority = get_skill_priority(skill, job_text)
+
+    return (difficulty * priority) / (improvement + 1e-6)
 
 
 # ---------------------------------------------------------------------------
@@ -262,14 +361,6 @@ def get_job_summary(job_id: int) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def skills_already_in_resume(resume_text: str, candidate_skills: list[str]) -> set[str]:
-    """
-    Return the subset of candidate skills that appear to already be on
-    the resume, based on cleaned/tokenized text.
-
-    For multi-word skills ("spring boot", "machine learning"), every
-    token must be present. Uses the same cleaner as the rest of the
-    pipeline so matching is consistent.
-    """
     if not resume_text or not candidate_skills:
         return set()
 
@@ -280,36 +371,16 @@ def skills_already_in_resume(resume_text: str, candidate_skills: list[str]) -> s
         skill_tokens = clean_text(skill).split()
         if skill_tokens and all(t in resume_tokens for t in skill_tokens):
             already.add(skill)
+
     return already
 
 
 class _PathScorer:
-    """
-    Pre-fits a TF-IDF vectorizer once per request so edge weights in the
-    Dijkstra search are consistent across the entire graph.
-
-    The vocabulary is fixed up-front using [resume + ALL candidate skills]
-    and [job_text] as the two documents. This means:
-
-      * Adding a skill to the resume just changes its term frequencies,
-        not the vocabulary or IDF weights.
-      * scorer.score(skillset) is a pure function of skillset — the same
-        skillset always produces the same score, regardless of where in the
-        search it was evaluated. That's what Dijkstra needs to be correct.
-
-    Replaces hundreds of vectorizer.fit_transform() calls per request
-    with one fit + N cheap transforms.
-    """
-
     def __init__(self, resume_text: str, job_text: str, candidate_skills: list[str]):
         self.resume_clean = clean_text(resume_text)
         self.job_clean = clean_text(job_text)
         self.skills = list(candidate_skills)
 
-        # Fit vocabulary once on a superset of everything we might score.
-        # Putting all skill tokens in the "resume side" document guarantees
-        # every skill has a column in the TF-IDF matrix, so transforming
-        # (resume + any subset of skills) later stays inside the vocabulary.
         superset_doc = (self.resume_clean + " " + " ".join(self.skills)).strip()
         corpus = [superset_doc, self.job_clean]
 
@@ -319,27 +390,14 @@ class _PathScorer:
             max_features=3000,
         )
 
-        # Fit on the superset so the vocabulary is frozen for the whole search.
         self.vectorizer.fit(corpus)
         self.job_vec = self.vectorizer.transform([self.job_clean])
 
     def score(self, skillset) -> float:
-        """
-        Cosine similarity between (resume + given skillset) and the job text.
-        Uses the pre-fit vocabulary — no refitting.
-
-        Each skill is repeated SKILL_LEARN_REPEAT times so its term frequency
-        in the document reflects how often a real resume mentions a skill
-        (typically 2-6x across summary/skills/experience). Repeating once
-        produced improvements that rounded to 0% and made the whole path
-        look flat.
-        """
         if not self.resume_clean or not self.job_clean:
             return 0.0
 
         if skillset:
-            # Each skill appears SKILL_LEARN_REPEAT times so "learning" a
-            # skill matches the signal strength of actually having it.
             added = " ".join(
                 s for s in sorted(skillset)
                 for _ in range(SKILL_LEARN_REPEAT)
@@ -359,18 +417,11 @@ def dijkstra_skill_path(
     target_score: float = 0.30,
     beam_width: int = BEAM_WIDTH,
 ) -> dict:
-    """
-    Uses TF-IDF cosine score as the main objective.
-    Each step simulates learning a skill by appending that skill to the resume text.
-
-    Skills that already appear on the resume are filtered out before the
-    search so the algorithm only considers skills the user genuinely needs
-    to acquire. Those already-held skills are returned separately as
-    `already_have` so the frontend can show "you have X of Y required skills".
-    """
     resume_text = resume_text or ""
     job_text = job_text or ""
+
     candidate_skills = normalize_skills(candidate_skills)
+    candidate_skills = filter_candidate_skills_for_context(candidate_skills, job_text)
 
     if not job_text.strip():
         return {
@@ -382,12 +433,10 @@ def dijkstra_skill_path(
             "reached_target": False,
         }
 
-    # Only search over skills the user doesn't already have.
     already_have = skills_already_in_resume(resume_text, candidate_skills)
     skills_to_search = [s for s in candidate_skills if s not in already_have]
 
     scorer = _PathScorer(resume_text, job_text, skills_to_search)
-
     start_score = scorer.score(frozenset())
 
     if start_score >= target_score or not skills_to_search:
@@ -416,8 +465,8 @@ def dijkstra_skill_path(
 
         if current_node in visited:
             continue
-        visited.add(current_node)
 
+        visited.add(current_node)
         current_score = scorer.score(current_node)
 
         if current_score >= target_score:
@@ -434,16 +483,23 @@ def dijkstra_skill_path(
             next_score = scorer.score(current_node | {skill})
             improvement = next_score - current_score
 
-            if improvement > 0:
-                candidates_scored.append((skill, improvement, next_score))
+            if improvement >= MIN_IMPROVEMENT_THRESHOLD:
+                priority = get_skill_priority(skill, job_text)
+                candidates_scored.append((skill, improvement, next_score, priority))
 
-        candidates_scored.sort(key=lambda x: x[1], reverse=True)
+        candidates_scored.sort(
+            key=lambda x: (
+                compute_edge_weight(x[0], x[1], job_text),
+                -x[1],
+            )
+        )
+
         candidates = candidates_scored[:beam_width]
 
-        for skill, improvement, score_after in candidates:
+        for skill, improvement, score_after, _priority in candidates:
             next_node = frozenset(set(current_node) | {skill})
 
-            edge_weight = compute_edge_weight(skill, improvement)
+            edge_weight = compute_edge_weight(skill, improvement, job_text)
             if edge_weight is None:
                 continue
 
@@ -482,6 +538,7 @@ def dijkstra_skill_path(
 
     path = []
     node = best_goal_node
+
     while prev.get(node) is not None:
         step = prev[node]
         path.append({
@@ -496,7 +553,6 @@ def dijkstra_skill_path(
     path.reverse()
 
     final_score = round(scorer.score(best_goal_node) * 100)
-
     learned_skills = set(best_goal_node)
     missing_skills = [s for s in skills_to_search if s not in learned_skills]
 
@@ -519,13 +575,6 @@ def recommend_skill_path_for_job(
     job_id: int,
     target_score: float = 0.30,
 ) -> dict:
-    """
-    Full pipeline:
-    - load latest resume raw text
-    - load job text
-    - load job skills as candidate skills
-    - use TF-IDF cosine as the dominant score
-    """
     resume_text = get_latest_resume_text(user_id)
     job_text = get_job_text_by_id(job_id)
     job_skills = get_job_skills(job_id)
@@ -540,7 +589,7 @@ def recommend_skill_path_for_job(
 
     return {
         "job": job,
-        "candidate_skills": job_skills,
+        "candidate_skills": filter_candidate_skills_for_context(job_skills, job_text),
         **result,
     }
 
@@ -553,5 +602,9 @@ if __name__ == "__main__":
     user_id = 1
     job_id = 1
 
-    result = recommend_skill_path_for_job(user_id=user_id, job_id=job_id, target_score=0.85)
+    result = recommend_skill_path_for_job(
+        user_id=user_id,
+        job_id=job_id,
+        target_score=0.30,
+    )
     print(result)
