@@ -45,28 +45,25 @@ TECH_NORMALIZATION = {
     "api's": "api",
     "apis": "api",
 }
-
-
 def clean_text(s: str) -> str:
     """
     Normalize a document for TF-IDF comparison.
 
       1. Lowercase.
-      2. Apply tech-term normalization (reactjs -> react, etc.) using
-         word boundaries so "py" doesn't turn "python" into "pythonthon".
+      2. Apply tech-term normalization.
       3. Strip non-alphanumeric except + # . -
-      4. Split dots/dashes into spaces so node.js becomes two tokens.
-      5. Drop tokens that are: too short, pure digits, or in the noise set.
+      4. Split dots/dashes into spaces.
+      5. Drop tokens that are too short, pure digits, or noise words.
+         Important: allow short valid skill tokens like "ai".
     """
     if not s:
         return ""
 
+    SHORT_ALLOWED_TOKENS = {"ai", "r", "c", "c#", "go"}
+
     s = s.lower()
 
     for old, new in TECH_NORMALIZATION.items():
-        # Word-boundary replacement. Without this, rules like "py" -> "python"
-        # would match INSIDE the word "python" and produce "pythonthon".
-        # re.escape handles keys that contain regex metacharacters (., +, etc).
         s = re.sub(rf"(?<!\w){re.escape(old)}(?!\w)", new, s)
 
     s = re.sub(r"[^a-z0-9\s\+\#\.\-]", " ", s)
@@ -75,7 +72,7 @@ def clean_text(s: str) -> str:
 
     cleaned_tokens = []
     for token in s.split():
-        if len(token) <= 2:
+        if len(token) <= 2 and token not in SHORT_ALLOWED_TOKENS:
             continue
         if token.isdigit():
             continue
