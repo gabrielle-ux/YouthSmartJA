@@ -10,7 +10,7 @@ from text_cleaning import clean_text, EXTRA_NOISE_WORDS, TECH_NORMALIZATION
 DB_CONFIG = {
     "host": "127.0.0.1",
     "user": "root",
-    "password": "",
+    "password": "Happy321",
     "database": "youthsmart",
     "port": 3306,
 }
@@ -22,9 +22,49 @@ def get_db():
     return mysql.connector.connect(**DB_CONFIG)
 
 
+def get_or_create_skill(cur, skill_name: str):
+    """
+    Inserts a skill if it does not exist, then returns its skill id.
+    """
+    skill_name = skill_name.strip().lower()
+
+    if not skill_name:
+        return None
+
+    cur.execute(
+        "INSERT IGNORE INTO skills (name) VALUES (%s)",
+        (skill_name,)
+    )
+
+    cur.execute(
+        "SELECT id FROM skills WHERE name=%s LIMIT 1",
+        (skill_name,)
+    )
+
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def save_user_skills(cur, user_id: int, keywords: list):
+    """
+    Links extracted resume keywords to the logged-in user.
+    """
+    for skill in keywords:
+        skill_id = get_or_create_skill(cur, skill)
+
+        if skill_id:
+            cur.execute(
+                """
+                INSERT IGNORE INTO user_skills (user_id, skill_id)
+                VALUES (%s, %s)
+                """,
+                (user_id, skill_id)
+            )
+
+
 def extract_keywords_single_doc(text: str, top_n: int = 40):
     """
-    Keyword extraction for ONE resume doc
+    Keyword extraction for ONE resume doc.
     """
     text = clean_text(text)
     if not text:
@@ -88,19 +128,31 @@ def save_resume_to_db(*, student_id, user_id: int, filename: str, raw_text: str)
 
     db = get_db()
     cur = db.cursor()
-    cur.execute(
-        """
-        INSERT INTO resumes (student_id, filename, raw_text, keywords, user_id)
-        VALUES (%s, %s, %s, %s, %s)
-        """,
-        (student_id, filename, raw_text, kws_csv, user_id)
-    )
-    resume_id = cur.lastrowid
-    db.commit()
-    cur.close()
-    db.close()
 
-    return resume_id, kws
+    try:
+        cur.execute(
+            """
+            INSERT INTO resumes (student_id, filename, raw_text, keywords, user_id)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (student_id, filename, raw_text, kws_csv, user_id)
+        )
+
+        resume_id = cur.lastrowid
+
+        # NEW: also save extracted keywords into relational skill tables
+        save_user_skills(cur, user_id, kws)
+
+        db.commit()
+        return resume_id, kws
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        cur.close()
+        db.close()
 
 
 def get_latest_resume_keywords(user_id: int) -> str:
@@ -119,9 +171,36 @@ def get_latest_resume_keywords(user_id: int) -> str:
     return row[0] if row else ""
 
 
+def get_user_skill_tags(user_id: int):
+    """
+    Returns the user's skills from the relational skills/user_skills tables.
+    Useful for profile/dashboard skill badges.
+    """
+    db = get_db()
+    cur = db.cursor()
+
+    try:
+        cur.execute(
+            """
+            SELECT s.name
+            FROM user_skills us
+            JOIN skills s ON us.skill_id = s.id
+            WHERE us.user_id = %s
+            ORDER BY s.name
+            """,
+            (user_id,)
+        )
+
+        return [row[0] for row in cur.fetchall()]
+
+    finally:
+        cur.close()
+        db.close()
+
+
 def recommend_jobs_by_keyword_overlap(user_id: int, limit: int = 10):
     """
-    Quick matching using keyword overlap :
+    Quick matching using keyword overlap:
     score = (# matched resume keywords) / (# job keywords)
 
     Returns top jobs with score, matched keywords, and job info from the jobs table.
