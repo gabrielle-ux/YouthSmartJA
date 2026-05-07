@@ -52,7 +52,7 @@ def build_keywords_for_docs(docs, top_n=25):
 DB_CONFIG = {
     "host": "127.0.0.1",
     "user": "root",
-    "password": "",
+    "password": "Happy321",
     "database": "youthsmart",
     "port": 3306,
 }
