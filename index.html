@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>YouthSmartJA — Connecting Jamaican Youth to Opportunity</title>
+<meta name="description" content="A job search and career guidance platform for Jamaican youth aged 16+, matching skills and interests with real opportunities."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+<nav class="navbar">
+  <span class="brand">YouthSmartJA</span>
+  <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+  <div class="nav-links">
+    <a href="#discover">Discover Jobs</a>
+    <a href="#features">Features</a>
+    <a href="#resume">Upload Resume</a>
+    <a href="#matching">Smart Matching</a>
+    <a href="#courses">Courses</a>
+    <a href="#roadmap">Roadmap</a>
+  </div>
+</nav>
+
+<section class="hero gradient-hero">
+  <div class="hero-bg"></div>
+  <div class="hero-inner reveal">
+    <span class="chip">Connecting Jamaican Youth to Opportunity</span>
+    <h1>Youth<span class="text-gradient">Smart</span>JA</h1>
+    <p class="lede">A job search and career guidance platform designed for Jamaican youth aged 16+, matching skills and interests with real opportunities.</p>
+  </div>
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+</section>
+
+<section id="discover" class="slide gradient-hero">
+  <h2>Discover Opportunities</h2>
+  <div class="grid grid-2">
+    <div class="card reveal"><div class="icon-box danger">⚠️</div><p>Employers require prior work experience, even for entry-level jobs.</p></div>
+    <div class="card reveal"><div class="icon-box danger">⏱️</div><p>Students cannot commit to full-time jobs while studying.</p></div>
+    <div class="card reveal"><div class="icon-box danger">👁️</div><p>Opportunities for youth are poorly distributed and hard to find.</p></div>
+    <div class="card reveal"><div class="icon-box danger">📉</div><p>Young people struggle to gain work experience and career exposure.</p></div>
+  </div>
+  <div class="quote-box reveal">
+    <p>"To address this problem, we developed <span class="text-gradient bold">YouthSmartJA</span>, a platform designed to connect Jamaican youth with opportunities tailored to their skills, interests, and academic commitments."</p>
+  </div>
+</section>
+
+<section id="features" class="slide">
+  <h2>Platform Features</h2>
+  <p class="muted lede-sm">YouthSmartJA is a job search and career guidance platform for youth aged 16 and over. Users set preferences on registration and upload their resume to receive personalized daily recommendations.</p>
+  <div class="grid grid-3">
+    <div class="feature reveal"><div class="icon-pill">💼</div><h3>Jobs & Internships</h3><p>Full-time, part-time, and internship listings.</p></div>
+    <div class="feature reveal"><div class="icon-pill">⚡</div><h3>Micro-Jobs</h3><p>Short-term flexible gigs for students.</p></div>
+    <div class="feature reveal"><div class="icon-pill">🎓</div><h3>Training Sessions</h3><p>Skill-building workshops and courses.</p></div>
+    <div class="feature reveal"><div class="icon-pill">📅</div><h3>Job Fairs</h3><p>Events connecting youth with employers.</p></div>
+    <div class="feature reveal"><div class="icon-pill">🎯</div><h3>Personalized Matching</h3><p>AI-powered job recommendations.</p></div>
+    <div class="feature reveal"><div class="icon-pill">📄</div><h3>Guidance Mode</h3><p>Resume optimization and skill gap analysis.</p></div>
+  </div>
+  <h3 class="sub">Technical Stack</h3>
+  <div class="stack">
+    <div class="tag"><span>Frontend</span><p>HTML · CSS · JavaScript</p></div>
+    <div class="tag"><span>Backend</span><p>Python · Flask API</p></div>
+    <div class="tag"><span>Database</span><p>MySQL</p></div>
+    <div class="tag"><span>External</span><p>JSearch API · AI/NLP Tools</p></div>
+  </div>
+</section>
+
+<section id="resume" class="slide gradient-hero">
+  <h2>Upload Your Resume</h2>
+  <div class="grid grid-2 align-start">
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-head"><span class="step-num">01</span><h3>Job Collection</h3></div>
+        <p>The system retrieves job postings using JSearch API via RapidAPI. Jobs are stored in the MySQL database.</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-head"><span class="step-num">02</span><h3>Resume Processing</h3></div>
+        <ul>
+          <li>Lowercasing & removing punctuation</li>
+          <li>Removing stop words</li>
+          <li>Extracting keywords and skills</li>
+          <li>AI interprets context and identifies related skills</li>
+        </ul>
+      </div>
+      <div class="step reveal">
+        <div class="step-head"><span class="step-num">03</span><h3>Text Matching</h3></div>
+        <p>TF-IDF converts text into numerical vectors based on term importance. Cosine similarity compares the resume vector to job description vectors, generating a compatibility match score.</p>
+      </div>
+    </div>
+    <div class="diagram reveal">
+      <div class="diagram-node">📄 Resume Upload</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node">🧠 NLP Preprocessing</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node">📊 TF-IDF Vectorization</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node">🎯 Cosine Similarity Match</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node accent">✅ Job Recommendations</div>
+    </div>
+  </div>
+</section>
+
+<section id="matching" class="slide">
+  <h2>Smart Job Matching</h2>
+  <div class="grid grid-2">
+    <div>
+      <h3 class="sub">Match Score Formula</h3>
+      <div class="bars">
+        <div class="bar-row"><div class="bar-label"><span>Skill Match (40%)</span><span class="pct">75%</span></div><div class="bar"><div class="bar-fill" data-w="75"></div></div></div>
+        <div class="bar-row"><div class="bar-label"><span>Availability (25%)</span><span class="pct">100%</span></div><div class="bar"><div class="bar-fill" data-w="100"></div></div></div>
+        <div class="bar-row"><div class="bar-label"><span>Education (15%)</span><span class="pct">100%</span></div><div class="bar"><div class="bar-fill" data-w="100"></div></div></div>
+        <div class="bar-row"><div class="bar-label"><span>Career Goals (10%)</span><span class="pct">100%</span></div><div class="bar"><div class="bar-fill" data-w="100"></div></div></div>
+        <div class="bar-row"><div class="bar-label"><span>Location (10%)</span><span class="pct">80%</span></div><div class="bar"><div class="bar-fill" data-w="80"></div></div></div>
+      </div>
+      <div class="score-box reveal">
+        <span>Final Score</span>
+        <p class="text-gradient">82%</p>
+        <small>Compatibility</small>
+      </div>
+    </div>
+    <div>
+      <h3 class="sub">Preference-Based Feed</h3>
+      <div class="pref-list">
+        <div class="pref reveal"><span class="dot dot-1"></span><div><p>High Pref + High Sim</p><small>Ideal opportunities</small></div></div>
+        <div class="pref reveal"><span class="dot dot-2"></span><div><p>High Pref + Low Sim</p><small>Related opportunities</small></div></div>
+        <div class="pref reveal"><span class="dot dot-3"></span><div><p>Low Pref + High Sim</p><small>New career options</small></div></div>
+        <div class="pref reveal"><span class="dot dot-4"></span><div><p>Low Pref + Low Sim</p><small>Exploratory</small></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="courses" class="slide gradient-hero">
+  <h2>Courses & Skill Growth</h2>
+  <p class="muted lede-sm">When a student's match score is low, the system provides actionable guidance to help them improve.</p>
+  <div class="grid grid-3">
+    <div class="feature big reveal"><div class="icon-pill big">✨</div><h3>Keyword Booster</h3><p>AI suggests keywords to add to resumes that match job criteria, helping students pass Applicant Tracking Systems (ATS).</p></div>
+    <div class="feature big reveal"><div class="icon-pill big">🛣️</div><h3>Skill Gap Analysis</h3><p>Using Dijkstra's Algorithm, the system finds the most efficient combination of missing skills to maximize the match score improvement.</p></div>
+    <div class="feature big reveal"><div class="icon-pill big">📚</div><h3>Course Recommendations</h3><p>After identifying missing skills, AI recommends courses that teach those skills in the least time with the highest proficiency.</p></div>
+  </div>
+  <div class="dijkstra reveal">
+    <h3>Dijkstra's Shortest Path — Concept</h3>
+    <div class="path">
+      <span class="node">Current Score</span><span class="arr">→</span>
+      <span class="node">Learn Python (+8%)</span><span class="arr">→</span>
+      <span class="node">Get Cert (+5%)</span><span class="arr">→</span>
+      <span class="node">Target Score</span>
+    </div>
+    <p class="muted center small">Each node = match score · Each edge = missing skill · Weight = score improvement</p>
+  </div>
+</section>
+
+<section id="roadmap" class="slide">
+  <h2>Roadmap & Next Steps</h2>
+  <div class="grid grid-3">
+    <div class="roadmap-col reveal">
+      <h3 class="rm-head done">Will Be Done</h3>
+      <ul>
+        <li>Job matching system</li>
+        <li>Resume processing</li>
+        <li>Preference-based feed</li>
+        <li>Guidance mode</li>
+      </ul>
+    </div>
+    <div class="roadmap-col reveal">
+      <h3 class="rm-head maybe">Might Be Done</h3>
+      <ul>
+        <li>Machine learning personalization</li>
+        <li>Networking features between students</li>
+      </ul>
+    </div>
+    <div class="roadmap-col reveal">
+      <h3 class="rm-head not">Not Done (for now)</h3>
+      <ul>
+        <li>Full employer recruitment system</li>
+        <li>Automated hiring decisions</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p class="text-gradient brand-lg">YouthSmartJA</p>
+  <p class="muted">Connecting Jamaican Youth to Opportunity</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
