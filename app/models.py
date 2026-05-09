@@ -1,5 +1,8 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy.ext.hybrid import hybrid_property
+from datetime import date, datetime, timezone
 
 #from app import db  # Assuming db = SQLAlchemy() is initialized in your factory
 db = SQLAlchemy()
@@ -13,11 +16,12 @@ class User(db.Model):
     
     # Enum for Roles
     role = db.Column(db.Enum('student', 'employer', 'admin', name='user_roles'), default='student')
+    # reminder that this is not just for students...
     
     is_active = db.Column(db.Boolean, default=True)
     full_name = db.Column(db.String(255))
     age = db.Column(db.Integer)
-    bio = db.Column(db.Text)
+    bio = db.Column(db.Text) 
     
     # Enum for Jamaican Parishes
     parish = db.Column(db.Enum(
@@ -27,12 +31,73 @@ class User(db.Model):
         name='jamaican_parishes'
     ))
     
+    #location_preferences = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=db.func.now())
+    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
+    
+    """Created index on email and username for faster lookup"""
+    __table_args__ = (
+        db.Index('ix_user_email', 'email', unique=True),
+        db.Index('ix_user_username', 'username', unique=True),
+    )
+        
+    # Relationships
+    skills = db.relationship('Skill', secondary='user_skills', backref=db.backref('users', lazy='dynamic'))
+ 
+    def is_authenticated(self):
+        return True
+
+    def is_active(self):
+        return True
+
+    def is_anonymous(self):
+        return False
+
+    def get_id(self):
+        return str(self.user_id)  # python 3 support
+        
+    def check_password(self, password_to_check):
+        return check_password_hash(self.password, password_to_check)
+
+    def set_password(self, new_password):
+        self.password = generate_password_hash(new_password)
+        
+    def __repr__(self):
+        return '<User %r>' % (self.username)
+    
+    
+class Preferences(db.Model):
+    __tablename__ = 'preferences'
+
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
     location_preferences = db.Column(db.Text)
+    availability = db.Column(db.Text) #remote or online, from job table
+    degree_requirements = db.Column(db.Text) #from degre table
+    exp_requirements = db.Column(db.Text)
+    
     created_at = db.Column(db.DateTime, default=db.func.now())
     updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
 
-    # Relationships
-    skills = db.relationship('Skill', secondary='user_skills', backref=db.backref('users', lazy='dynamic'))
+class Profile(db.Model):
+    __tablename__ = 'profile'
+
+    profile_id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False, unique=True)
+    visibility = db.Column(db.String(50), nullable=False, default="Public") 
+    education = db.Column(db.String(50), nullable=True) 
+    photo_url = db.Column(db.String(255), nullable=True)
+    bio = db.Column(db.String(255), nullable=True) 
+    location = db.Column(db.String(100), nullable=True)
+
+    interests = db.Column(db.String(255), nullable=True)
+
+    PERSONAL_INTERESTS = [
+    'Tech', 'Music', 'Art', 'Sports', 'Cooking', 'Travel',
+    'Fitness', 'Gaming', 'Reading', 'Film', 
+    'Photography', 'Fashion', 'Pets', 'Socializing']
+
+    # Relationship back to User
+    user = db.relationship('User', backref=db.backref('profile', uselist=False))
 
 class UserSkill(db.Model):
     __tablename__ = 'user_skills'

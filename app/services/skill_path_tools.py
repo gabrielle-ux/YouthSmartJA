@@ -2,6 +2,11 @@
 
 import heapq
 import logging
+
+from app.models import db, JobSkill, Course #not created yet
+from sqlalchemy import func
+
+
 from mysql.connector.pooling import MySQLConnectionPool
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -156,44 +161,90 @@ SOFTWARE_CONTEXT_TERMS: set[str] = {
 
 def _load_known_skills_from_db() -> set[str]:
     try:
-        db = get_db()
-        try:
-            cur = db.cursor()
-            cur.execute("SELECT DISTINCT LOWER(TRIM(skill)) FROM job_skills WHERE skill IS NOT NULL")
-            skills = {row[0] for row in cur.fetchall() if row[0]}
-            if skills:
-                log.info("Loaded %d known skills from job_skills table.", len(skills))
-            return skills
-        finally:
-            db.close()
+        # Use SQLAlchemy query with func for LOWER and TRIM
+        # Equivalent to: SELECT DISTINCT LOWER(TRIM(skill)) FROM job_skills
+        results = db.session.query(
+            func.distinct(func.lower(func.trim(JobSkill.skill)))
+        ).filter(JobSkill.skill.isnot(None)).all()
+
+        # results is a list of tuples like [('python',), ('java',)]
+        skills = {row[0] for row in results if row[0]}
+        
+        if skills:
+            log.info("Loaded %d known skills from job_skills table.", len(skills))
+        return skills
+
     except Exception as exc:
         log.warning("Could not load skills from DB (%s). Using hardcoded fallback.", exc)
         return set()
 
 
+# def _load_known_skills_from_db() -> set[str]:
+#     try:
+#         db = get_db()
+#         try:
+#             cur = db.cursor()
+#             cur.execute("SELECT DISTINCT LOWER(TRIM(skill)) FROM job_skills WHERE skill IS NOT NULL")
+#             skills = {row[0] for row in cur.fetchall() if row[0]}
+#             if skills:
+#                 log.info("Loaded %d known skills from job_skills table.", len(skills))
+#             return skills
+#         finally:
+#             db.close()
+#     except Exception as exc:
+#         log.warning("Could not load skills from DB (%s). Using hardcoded fallback.", exc)
+#         return set()
+
+
+
+
 def _load_skill_costs_from_db() -> dict[str, float]:
     try:
-        db = get_db()
-        try:
-            cur = db.cursor()
-            cur.execute("""
-                SELECT LOWER(TRIM(skill)), AVG(duration_hours)
-                FROM courses
-                WHERE skill IS NOT NULL AND duration_hours IS NOT NULL
-                GROUP BY LOWER(TRIM(skill))
-            """)
-            costs = {}
-            for skill, avg_hours in cur.fetchall():
-                if skill and avg_hours is not None:
-                    costs[skill] = round(float(avg_hours), 2)
-            if costs:
-                log.info("Loaded difficulty costs for %d skills from courses table.", len(costs))
-            return costs
-        finally:
-            db.close()
+        # SELECT LOWER(TRIM(skill)), AVG(duration_hours) ... GROUP BY ...
+        results = db.session.query(
+            func.lower(func.trim(Course.skill)),
+            func.avg(Course.duration_hours)
+        ).filter(
+            Course.skill.isnot(None),
+            Course.duration_hours.isnot(None)
+        ).group_by(
+            func.lower(func.trim(Course.skill))
+        ).all()
+
+        costs = {skill: round(float(avg_hours), 2) for skill, avg_hours in results if skill}
+
+        if costs:
+            log.info("Loaded difficulty costs for %d skills from courses table.", len(costs))
+        return costs
+
     except Exception as exc:
         log.warning("Could not load skill costs from DB (%s). Using hardcoded fallback.", exc)
         return {}
+
+
+# def _load_skill_costs_from_db() -> dict[str, float]:
+#     try:
+#         db = get_db()
+#         try:
+#             cur = db.cursor()
+#             cur.execute("""
+#                 SELECT LOWER(TRIM(skill)), AVG(duration_hours)
+#                 FROM courses
+#                 WHERE skill IS NOT NULL AND duration_hours IS NOT NULL
+#                 GROUP BY LOWER(TRIM(skill))
+#             """)
+#             costs = {}
+#             for skill, avg_hours in cur.fetchall():
+#                 if skill and avg_hours is not None:
+#                     costs[skill] = round(float(avg_hours), 2)
+#             if costs:
+#                 log.info("Loaded difficulty costs for %d skills from courses table.", len(costs))
+#             return costs
+#         finally:
+#             db.close()
+#     except Exception as exc:
+#         log.warning("Could not load skill costs from DB (%s). Using hardcoded fallback.", exc)
+#         return {}
 
 
 def _build_known_skills() -> set[str]:
@@ -333,27 +384,59 @@ def compute_edge_weight(skill: str, improvement: float, job_text: str = "") -> f
 # Database helpers
 # ---------------------------------------------------------------------------
 
-def get_job_skills(job_id: int) -> list[str]:
-    db = get_db()
-    try:
-        cur = db.cursor()
-        cur.execute("SELECT skill FROM job_skills WHERE job_id=%s", (job_id,))
-        return normalize_skills([r[0] for r in cur.fetchall()])
-    finally:
-        db.close()
+from app.models import Job, JobSkill
 
+def get_job_skills(job_id: int) -> list[str]:
+    # Query only the skills for this job_id
+    results = JobSkill.query.filter_by(job_id=job_id).all()
+    
+    # Extract the skill names and normalize them
+    # results is a list of JobSkill objects
+    skill_names = [r.skill for r in results]
+    
+    return normalize_skills(skill_names)
+
+
+# def get_job_skills(job_id: int) -> list[str]:
+#     db = get_db()
+#     try:
+#         cur = db.cursor()
+#         cur.execute("SELECT skill FROM job_skills WHERE job_id=%s", (job_id,))
+#         return normalize_skills([r[0] for r in cur.fetchall()])
+#     finally:
+#         db.close()
+
+from app.models import Job
 
 def get_job_summary(job_id: int) -> dict | None:
-    db = get_db()
-    try:
-        cur = db.cursor(dictionary=True)
-        cur.execute(
-            "SELECT id, title, company, city, country, apply_link FROM jobs WHERE id=%s LIMIT 1",
-            (job_id,),
-        )
-        return cur.fetchone()
-    finally:
-        db.close()
+    # Fetch the job by ID
+    job = Job.query.get(job_id)
+    
+    if not job:
+        return None
+
+    # Return a dictionary with the specific fields you need
+    return {
+        "id": job.id,
+        "title": job.title,
+        "company": job.company,
+        "city": job.city,
+        "country": job.country,
+        "apply_link": job.apply_link
+    }
+
+
+# def get_job_summary(job_id: int) -> dict | None:
+#     db = get_db()
+#     try:
+#         cur = db.cursor(dictionary=True)
+#         cur.execute(
+#             "SELECT id, title, company, city, country, apply_link FROM jobs WHERE id=%s LIMIT 1",
+#             (job_id,),
+#         )
+#         return cur.fetchone()
+#     finally:
+#         db.close()
 
 
 # ---------------------------------------------------------------------------

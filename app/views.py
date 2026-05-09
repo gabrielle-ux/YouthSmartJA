@@ -7,11 +7,15 @@ import requests
 from datetime import timedelta
 from app.blueprints.searchjobs import jobs_bp
 
+from app.models import db, User, UserSkill, Job
+from app.forms import LoginForm, SignUpForm
+
 from flask import Blueprint, Flask, request, jsonify, render_template, current_app
 from flask_jwt_extended import JWTManager, get_jwt_identity
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
+from flask_login import login_user, logout_user, current_user, login_required
 
 from app.services.resume_tools import (
     ALLOWED_EXTENSIONS,
@@ -41,18 +45,121 @@ def allowed_file(filename: str) -> bool:
     return ext in current_app.config["ALLOWED_EXTENSIONS"]
 
 
+# ---------------------------------------------------------------------------
+# Signup and Login
+# ---------------------------------------------------------------------------
 
 @main_bp.get("/")
 def home():
-    return render_template("home.html")
+    return render_template("index.html")
 
+@main_bp.route('/api/v1/auth/login', methods=['POST']) 
+def login():
+    # 1. Get the JSON data from the request
+    data = request.get_json()
+
+    # 2. Instantiate the form with the JSON data
+    # We pass data=data so WTForms can map the keys to field names
+    form = LoginForm(data=data, meta={'csrf': False}) # Disable CSRF for pure API calls if not using cookies
+
+    # 3. Validate the data (checks for required fields, email format, etc.)
+    if form.validate():
+        user = User.query.filter_by(email=form.email.data).first()
+        
+        # 4. Verify password
+        if user and check_password_hash(user.password, form.password.data):
+            login_user(user)
+            return jsonify({
+                "message": "Login successful",
+                "user": {
+                    "username": user.username,
+                    "user_id": user.user_id
+                }
+            }), 200
+        
+        return jsonify({"error": "Invalid email or password"}), 401
+
+    # 5. If validation fails, return the specific form errors
+    return jsonify({"errors": form.errors}), 400
+
+
+from werkzeug.security import generate_password_hash
+
+@main_bp.route('/api/v1/signup', methods=['POST'])
+def signup():
+    data = request.get_json() 
+    
+    #Instantiate SignUpForm with JSON data
+    form = SignUpForm(data=data, meta={'csrf': False})
+
+    #Validates the form
+    if form.validate():
+        # Check if email already exists
+        if User.query.filter_by(email=form.email.data).first():
+            return jsonify({"error": "Email already exists"}), 400
+
+        try:
+            # Creates the User object using form data
+            new_user = User(
+                id=form.id.data,
+                password=form.password.data,
+                email=form.email.data,
+                full_name=form.full_name.data, #maybe separate this into first and last names
+                #username=form.username.data, #we didn't ask for username?
+                role=form.role.data, 
+                age=form.age.data,
+                bio=form.bio.data, #should we create a profile separate for this? do they even need a bio?
+                parish=form.parish.data,
+                locaion_preferences = form.location_preferences.data #parish selection?
+            )
+            #potential other categories: gender
+            
+            db.session.add(new_user)
+            db.session.flush() # Generates user_id
+
+            # Creates the Profile object automatically
+            # new_profile = Profile(
+            #     user_id=new_user.user_id, 
+            #     visibility="Public", #Sets visibility of Profile to public automatically 
+            #     education=None,
+            #     photo_url=None,
+            #     bio=None,
+            #     location=None
+            # )
+            
+            # db.session.add(new_profile)
+            db.session.commit() 
+
+            return jsonify({"message": f"Welcome to YouthSmartJA {new_user.username}!"}), 201
+            
+        except Exception as e:
+            db.session.rollback() 
+            return jsonify({"error": "An error occurred during registration."}), 500
+
+    #Returns validation errors (e.g., "Field Required" or "Invalid Email")
+    return jsonify({"errors": form.errors}), 400
+    
+    
+@main_bp.route('/api/v1/auth/logout')
+@login_required
+def logout():
+    """
+    Clears the session cookie and logs the user out
+    """
+    logout_user()
+    
+    return jsonify({
+        "status": "success",
+        "message": "See you later! Hope your next match is just a 'drift' away."
+    }), 200
 
 # ---------------------------------------------------------------------------
 # Auth Test Page
 # ---------------------------------------------------------------------------
-@main_bp.get("/auth-test")
-def auth_test():
-    return render_template("auth_test.html")
+
+# @main_bp.get("/auth-test")
+# def auth_test():
+#     return render_template("auth_test.html")
 
 
 # ---------------------------------------------------------------------------
