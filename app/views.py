@@ -40,6 +40,13 @@ def allowed_file(filename: str) -> bool:
     # Pull from the Config class via current_app
     return ext in current_app.config["ALLOWED_EXTENSIONS"]
 
+
+
+@main_bp.get("/")
+def home():
+    return render_template("home.html")
+
+
 # ---------------------------------------------------------------------------
 # Auth Test Page
 # ---------------------------------------------------------------------------
