@@ -96,12 +96,14 @@ def allowed_file(filename: str) -> bool:
     return ext in ALLOWED_EXTENSIONS
 
 
+@app.get("/")
+def auth_test():
+    return render_template("index.html")
+
 # ---------------------------------------------------------------------------
 # Auth Test Page
 # ---------------------------------------------------------------------------
-@app.get("/auth-test")
-def auth_test():
-    return render_template("auth_test.html")
+
 
 
 # ---------------------------------------------------------------------------
