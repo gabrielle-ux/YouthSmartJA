@@ -1,0 +1,226 @@
+
+
+USE youthsmart;
+
+
+
+SHOW TABLES;
+
+SELECT COUNT(*) AS total_jobs FROM jobs;
+SELECT COUNT(*) AS total_resumes FROM resumes;
+
+
+DESCRIBE jobs;
+DESCRIBE resumes;
+
+DESCRIBE job_skills;
+DESCRIBE job_experience;
+DESCRIBE job_certs;
+DESCRIBE job_degrees;
+
+
+SELECT *
+FROM jobs
+ORDER BY id DESC;
+
+
+SELECT *
+FROM jobs
+LIMIT 20;
+
+
+SELECT
+    id,
+    title,
+    company,
+    city,
+    country,
+    is_remote,
+    salary_text,
+    salary_min,
+    salary_max,
+    salary_currency,
+    salary_period,
+    LEFT(apply_link, 120) AS apply_link_preview
+FROM jobs
+ORDER BY id DESC
+LIMIT 50;
+
+
+SELECT
+    title,
+    LEFT(apply_link, 80) AS apply_link_preview,
+    salary_text,
+    salary_min,
+    salary_max,
+    salary_currency,
+    salary_period
+FROM jobs
+ORDER BY id DESC
+LIMIT 10;
+
+
+
+SELECT *
+FROM jobs
+WHERE title LIKE '%Data Science%';
+
+SELECT *
+FROM jobs
+WHERE title LIKE '%Web Developer%';
+
+SELECT *
+FROM jobs
+WHERE title LIKE '%Software Engineer%';  -- fixed spelling
+
+
+
+SELECT
+    id,
+    title,
+    LEFT(keywords, 120) AS keywords_preview
+FROM jobs
+ORDER BY id DESC
+LIMIT 5;
+
+-- Jobs with empty keywords (debug)
+SELECT id, title
+FROM jobs
+WHERE keywords IS NULL OR keywords = ''
+ORDER BY id DESC
+LIMIT 50;
+
+-- ============================================
+-- 4) CHILD TABLES: SKILLS / EXPERIENCE / CERTS / DEGREES
+-- ============================================
+
+-- Show skills rows (first 20)
+SELECT j.title, s.skill
+FROM jobs j
+JOIN job_skills s ON s.job_id = j.id
+ORDER BY j.id DESC
+LIMIT 20;
+
+-- Show experience rows (first 20)
+SELECT j.title, e.experience
+FROM jobs j
+JOIN job_experience e ON e.job_id = j.id
+ORDER BY j.id DESC
+LIMIT 20;
+
+-- Show certifications rows (first 20)
+SELECT j.title, c.cert
+FROM jobs j
+JOIN job_certs c ON c.job_id = j.id
+ORDER BY j.id DESC
+LIMIT 20;
+
+-- Show degrees rows (first 20)
+SELECT j.title, d.degree
+FROM jobs j
+JOIN job_degrees d ON d.job_id = j.id
+ORDER BY j.id DESC
+LIMIT 20;
+
+
+
+SELECT
+    j.id,
+    j.title,
+    j.company,
+    j.city,
+    j.country,
+    j.is_remote,
+    j.salary_text,
+    j.salary_min,
+    j.salary_max,
+    j.salary_currency,
+    j.salary_period,
+    LEFT(j.apply_link, 120) AS apply_link_preview,
+    GROUP_CONCAT(DISTINCT s.skill ORDER BY s.skill SEPARATOR ', ') AS skills,
+    GROUP_CONCAT(DISTINCT e.experience ORDER BY e.experience SEPARATOR ', ') AS experience,
+    GROUP_CONCAT(DISTINCT c.cert ORDER BY c.cert SEPARATOR ', ') AS certifications,
+    GROUP_CONCAT(DISTINCT d.degree ORDER BY d.degree SEPARATOR ', ') AS degrees
+FROM jobs j
+LEFT JOIN job_skills s ON s.job_id = j.id
+LEFT JOIN job_experience e ON e.job_id = j.id
+LEFT JOIN job_certs c ON c.job_id = j.id
+LEFT JOIN job_degrees d ON d.job_id = j.id
+GROUP BY j.id
+ORDER BY j.id DESC
+LIMIT 50;
+
+
+SELECT
+    id,
+    student_id,
+    user_id,
+    filename,
+    LENGTH(raw_text) AS text_length,
+    LEFT(keywords, 150) AS keywords_preview,
+    uploaded_at
+FROM resumes
+ORDER BY id DESC
+LIMIT 20;
+
+-- Total resumes
+SELECT COUNT(*) AS total_resumes
+FROM resumes;
+
+-- Delete ONE resume by id (example)
+DELETE FROM resumes WHERE id = 1;
+
+-- Delete all resumes for a user (example)
+-- DELETE FROM resumes WHERE user_id = 1;
+
+-- ============================================
+-- 7) CLEAR DATA (KEEP STRUCTURE) - SAFE RESET
+-- ============================================
+-- NOTE: TRUNCATE resets AUTO_INCREMENT. Use with care.
+
+-- Clear ONLY resumes
+-- TRUNCATE TABLE resumes;
+
+-- Clear ONLY jobs (and children) safely
+-- SET FOREIGN_KEY_CHECKS = 0;
+-- TRUNCATE TABLE job_skills;
+-- TRUNCATE TABLE job_certs;
+-- TRUNCATE TABLE job_degrees;
+-- TRUNCATE TABLE job_experience;
+-- TRUNCATE TABLE jobs;
+-- SET FOREIGN_KEY_CHECKS = 1;
+
+-- Clear EVERYTHING (jobs + resumes)
+-- SET FOREIGN_KEY_CHECKS = 0;
+-- TRUNCATE TABLE job_skills;
+-- TRUNCATE TABLE job_certs;
+-- TRUNCATE TABLE job_degrees;
+-- TRUNCATE TABLE job_experience;
+-- TRUNCATE TABLE jobs;
+-- TRUNCATE TABLE resumes;
+-- SET FOREIGN_KEY_CHECKS = 1;
+
+-- ============================================
+-- 8) OPTIONAL: FIND JOBS REQUIRING A SKILL (FROM job_skills)
+-- ============================================
+
+-- Example: jobs that mention Python in extracted skills
+SELECT j.id, j.title, j.company
+FROM jobs j
+JOIN job_skills s ON s.job_id = j.id
+WHERE s.skill = 'python'
+ORDER BY j.id DESC
+LIMIT 50;
+
+
+
+-- Example: jobs requiring 5+ years (based on extracted experience strings)
+SELECT j.id, j.title, j.company, e.experience
+FROM jobs j
+JOIN job_experience e ON e.job_id = j.id
+WHERE e.experience LIKE '%5%'
+ORDER BY j.id DESC
+LIMIT 50;
+
+pip install pypdf
+ pip install python-docx

@@ -1,0 +1,19 @@
+#requirements.txt based on the packages I had to install
+# Web Framework & Auth
+Flask
+flask-sqlalchemy
+flask-cors
+flask-jwt-extended
+python-dotenv
+Werkzeug
+# Database Drivers
+mysql-connector-python
+# Data Science & Matching
+scikit-learn
+numpy
+scipy
+# Document Processing (PDF & DOCX)
+pypdf
+python-docx
+# Security
+bcrypt
