@@ -34,10 +34,11 @@ load_dotenv()
 
 # ---------------------------------------------------------------------------
 # n8n Webhook URL
+# Production URL from your active n8n workflow
 # ---------------------------------------------------------------------------
 N8N_WEBHOOK_URL = os.getenv(
     "N8N_WEBHOOK_URL",
-    "http://localhost:5678/webhook-test/100fbd70-b636-4445-93de-6c98f4540346"
+    "http://localhost:5678/webhook/guidance-courses"
 )
 
 app = Flask(__name__)
@@ -45,7 +46,18 @@ app = Flask(__name__)
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------
-CORS(app, origins=["http://127.0.0.1:5000", "http://localhost:5000"])
+CORS(
+    app,
+    resources={r"/api/*": {"origins": [
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+        "http://127.0.0.1:5000",
+        "http://localhost:5000",
+    ]}},
+    supports_credentials=True,
+)
 
 # ---------------------------------------------------------------------------
 # JWT Config
@@ -56,7 +68,7 @@ app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
 jwt = JWTManager(app)
 
 # ---------------------------------------------------------------------------
-# Token revocation check (logout support)
+# Token revocation check
 # ---------------------------------------------------------------------------
 @jwt.token_in_blocklist_loader
 def check_if_token_revoked(jwt_header, jwt_payload):
@@ -79,6 +91,7 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
 def allowed_file(filename: str) -> bool:
     if "." not in filename:
         return False
+
     ext = filename.rsplit(".", 1)[1].lower()
     return ext in ALLOWED_EXTENSIONS
 
@@ -204,15 +217,17 @@ def get_skill_path(job_id):
         target_score=target_score
     )
 
+    # Return both nested and direct fields so frontend can read it easily.
     return jsonify({
         "ok": True,
-        "result": result
+        "result": result,
+        **result
     })
 
 
 # ---------------------------------------------------------------------------
 # Guidance Courses — students/admin only
-# Combines Dijkstra skill path + n8n learning recommendations
+# Combines Dijkstra skill path + n8n course recommendations
 # ---------------------------------------------------------------------------
 @app.get("/api/jobs/<int:job_id>/guidance-courses")
 @roles_required("student", "admin")
@@ -221,50 +236,51 @@ def get_guidance_courses(job_id):
 
     target_score = float(request.args.get("target_score", 0.30))
 
-    # 1. Generate skill path
+    # 1. Generate skill path using your Dijkstra-style algorithm
     skill_path_result = recommend_skill_path_for_job(
         user_id=user_id,
         job_id=job_id,
         target_score=target_score
     )
 
-    # 2. Extract skills from path
+    # 2. Extract skills from the Dijkstra path
     skills = [
         step["learn"]
         for step in skill_path_result.get("path", [])
         if step.get("learn")
     ]
 
-    # fallback to missing_skills if path empty
+    # 3. Fallback to missing_skills if path is empty
     if not skills:
         skills = skill_path_result.get("missing_skills", [])
 
-    # 3. No missing skills
+    # 4. If no skills are missing, return clean response
     if not skills:
         return jsonify({
             "ok": True,
             "message": "No missing skills found for this job.",
             "skill_path": skill_path_result,
+            "courses": [],
             "n8n": {
                 "ok": True,
-                "recommendations": []
+                "courses": []
             }
         })
 
-    # 4. Send to n8n
+    # 5. Send missing skills to n8n
     try:
         n8n_response = requests.post(
             N8N_WEBHOOK_URL,
             json={
                 "user_id": user_id,
                 "job_id": job_id,
+                "missing_skills": skills,
                 "skills": skills
             },
             timeout=15
         )
 
         n8n_response.raise_for_status()
-
         n8n_data = n8n_response.json()
 
     except requests.RequestException as exc:
@@ -272,13 +288,23 @@ def get_guidance_courses(job_id):
             "ok": False,
             "error": "Failed to connect to n8n workflow.",
             "details": str(exc),
-            "skill_path": skill_path_result
+            "skill_path": skill_path_result,
+            "courses": []
         }), 502
 
-    # 5. Combined response
+    # 6. Extract courses from n8n response
+    courses = (
+        n8n_data.get("courses")
+        or n8n_data.get("recommendations")
+        or []
+    )
+
+    # 7. Return data in a frontend-friendly format
     return jsonify({
         "ok": True,
         "skill_path": skill_path_result,
+        "missing_skills": skills,
+        "courses": courses,
         "n8n": n8n_data
     })
 
@@ -290,16 +316,26 @@ def get_guidance_courses(job_id):
 @roles_required("student", "admin")
 def upload_resume_file():
     if "file" not in request.files:
-        return jsonify({"ok": False, "error": "Missing file field 'file'"}), 400
+        return jsonify({
+            "ok": False,
+            "error": "Missing file field 'file'"
+        }), 400
 
     f = request.files["file"]
+
     if not f or not f.filename:
-        return jsonify({"ok": False, "error": "No file selected"}), 400
+        return jsonify({
+            "ok": False,
+            "error": "No file selected"
+        }), 400
 
     filename = secure_filename(f.filename)
 
     if not allowed_file(filename):
-        return jsonify({"ok": False, "error": "Only .pdf and .docx supported"}), 400
+        return jsonify({
+            "ok": False,
+            "error": "Only .pdf and .docx supported"
+        }), 400
 
     user_id = int(get_jwt_identity())
     student_id = user_id
@@ -312,7 +348,10 @@ def upload_resume_file():
         else:
             raw_text = extract_text_from_docx(f.stream)
     except Exception:
-        return jsonify({"ok": False, "error": "Failed to read file"}), 400
+        return jsonify({
+            "ok": False,
+            "error": "Failed to read file"
+        }), 400
 
     if not raw_text or len(raw_text.strip()) < 50:
         return jsonify({
@@ -335,6 +374,7 @@ def upload_resume_file():
         "filename": filename,
         "text_length": len(raw_text),
         "keywords_preview": keywords[:20],
+        "keywords": keywords,
         "matches": matches
     })
 

@@ -252,7 +252,7 @@ SKILL_LEARN_REPEAT = 4
 
 # Minimum cosine improvement required before a skill is accepted.
 # This prevents tiny improvements like 0.0002 from entering the path.
-MIN_IMPROVEMENT_THRESHOLD = 0.01
+MIN_IMPROVEMENT_THRESHOLD = 0.005
 
 
 # ---------------------------------------------------------------------------
