@@ -247,7 +247,7 @@ PREREQUISITES: dict[str, set[str]] = {
     "mongodb": {"sql"},
 }
 
-BEAM_WIDTH = 8
+BEAM_WIDTH = 4
 SKILL_LEARN_REPEAT = 4
 
 # Minimum cosine improvement required before a skill is accepted.
@@ -386,8 +386,8 @@ class _PathScorer:
 
         self.vectorizer = TfidfVectorizer(
             stop_words="english",
-            ngram_range=(1, 2),
-            max_features=3000,
+            ngram_range=(1, 1),
+            max_features=1000,
         )
 
         self.vectorizer.fit(corpus)
