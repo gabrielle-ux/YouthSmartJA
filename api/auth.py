@@ -93,7 +93,6 @@ def get_current_user_role() -> str:
     return get_jwt().get("role", "student")
 
 
-# 🔥 CLEAN ROLE DECORATOR
 def roles_required(*allowed_roles):
     def outer(fn):
         @wraps(fn)
@@ -133,7 +132,10 @@ def get_user_by_id(user_id: int):
         cur.execute(
             """
             SELECT id, email, full_name, age, bio, parish,
-                   location_preferences, role,
+                   location_preferences,
+                   career_interest, preferred_job_type, work_style,
+                   availability, learning_goals,
+                   role,
                    COALESCE(is_active, 1) AS is_active,
                    created_at, updated_at
             FROM users
@@ -160,6 +162,12 @@ def register():
     full_name = data.get("full_name", "").strip()
     role = data.get("role", "student").strip().lower()
 
+    career_interest = data.get("career_interest", "").strip()
+    preferred_job_type = data.get("preferred_job_type", "").strip()
+    work_style = data.get("work_style", "").strip()
+    availability = data.get("availability", "").strip()
+    learning_goals = data.get("learning_goals", "").strip()
+
     if not email or not password or not full_name:
         return json_error("full_name, email, and password are required", 400)
 
@@ -179,8 +187,19 @@ def register():
     try:
         cur = db.cursor()
         cur.execute(
-            "INSERT INTO users (email, password_hash, full_name, role) VALUES (%s, %s, %s, %s)",
-            (email, password_hash, full_name, role),
+            """
+            INSERT INTO users (
+                email, password_hash, full_name, role,
+                career_interest, preferred_job_type, work_style,
+                availability, learning_goals
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                email, password_hash, full_name, role,
+                career_interest, preferred_job_type, work_style,
+                availability, learning_goals,
+            ),
         )
         db.commit()
         user_id = cur.lastrowid
@@ -193,7 +212,17 @@ def register():
 
     return jsonify({
         "ok": True,
-        "user": {"id": user_id, "email": email, "full_name": full_name, "role": role},
+        "user": {
+            "id": user_id,
+            "email": email,
+            "full_name": full_name,
+            "role": role,
+            "career_interest": career_interest,
+            "preferred_job_type": preferred_job_type,
+            "work_style": work_style,
+            "availability": availability,
+            "learning_goals": learning_goals,
+        },
         "access_token": token
     }), 201
 
@@ -287,6 +316,21 @@ def update_profile():
             return json_error(err, 400)
         fields["location_preferences"] = ",".join(data["location_preferences"])
 
+    if "career_interest" in data:
+        fields["career_interest"] = data["career_interest"].strip()
+
+    if "preferred_job_type" in data:
+        fields["preferred_job_type"] = data["preferred_job_type"].strip()
+
+    if "work_style" in data:
+        fields["work_style"] = data["work_style"].strip()
+
+    if "availability" in data:
+        fields["availability"] = data["availability"].strip()
+
+    if "learning_goals" in data:
+        fields["learning_goals"] = data["learning_goals"].strip()
+
     if not fields:
         return json_error("No fields to update", 400)
 
@@ -294,7 +338,10 @@ def update_profile():
     try:
         cur = db.cursor()
         set_clause = ", ".join(f"{k}=%s" for k in fields)
-        cur.execute(f"UPDATE users SET {set_clause} WHERE id=%s", list(fields.values()) + [user_id])
+        cur.execute(
+            f"UPDATE users SET {set_clause} WHERE id=%s",
+            list(fields.values()) + [user_id]
+        )
         db.commit()
     finally:
         db.close()

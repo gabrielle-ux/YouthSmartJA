@@ -15,6 +15,15 @@ function authHeaders(){
     : {};
 }
 
+function escapeHTML(value){
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function logApi(title, data){
   const log = document.getElementById("apiLog");
 
@@ -46,6 +55,10 @@ function hideDashboard(){
   if(dashboard){
     dashboard.classList.add("hidden");
   }
+}
+
+function getJobId(job){
+  return job.id || job.job_id;
 }
 
 function getJobLink(job){
@@ -237,10 +250,16 @@ if(registerForm){
     event.preventDefault();
 
     const payload = {
-      full_name: document.getElementById("registerName").value,
-      email: document.getElementById("registerEmail").value,
+      full_name: document.getElementById("registerName").value.trim(),
+      email: document.getElementById("registerEmail").value.trim(),
       password: document.getElementById("registerPassword").value,
-      role: document.getElementById("registerRole").value
+      role: document.getElementById("registerRole").value,
+
+      career_interest: document.getElementById("careerInterest").value.trim(),
+      preferred_job_type: document.getElementById("preferredJobType").value,
+      work_style: document.getElementById("workStyle").value,
+      availability: document.getElementById("availability").value,
+      learning_goals: document.getElementById("learningGoals").value.trim()
     };
 
     try{
@@ -329,6 +348,7 @@ if(loginForm){
       showMessage("Login successful.");
       showDashboard();
 
+      await loadSavedResume();
       await loadMatches();
       await loadBookmarks();
 
@@ -405,7 +425,7 @@ if(uploadResumeBtn){
         status.textContent = "Resume uploaded successfully.";
       }
 
-      renderSkillTags(data.keywords || data.skills || data.resume_keywords || []);
+      await loadSavedResume();
       await loadMatches();
 
     }catch(error){
@@ -442,8 +462,63 @@ function renderSkillTags(skills){
 
   box.innerHTML = skills
     .slice(0,20)
-    .map(skill => `<span class="tag">${skill}</span>`)
+    .map(skill => `<span class="tag">${escapeHTML(skill)}</span>`)
     .join("");
+}
+
+
+async function loadSavedResume(){
+  const status = document.getElementById("resumeStatus");
+
+  if(!getToken()){
+    return;
+  }
+
+  try{
+    const res = await fetch(`${API_BASE}/api/resume/me`, {
+      headers:authHeaders()
+    });
+
+    const data = await res.json();
+
+    logApi("SAVED RESUME RESPONSE", data);
+
+    if(!res.ok || !data.ok){
+      if(status){
+        status.textContent = "Could not check saved resume.";
+      }
+      return;
+    }
+
+    if(!data.has_resume){
+      if(status){
+        status.textContent = "No resume uploaded yet.";
+      }
+
+      renderSkillTags([]);
+      return;
+    }
+
+    const filename = data.resume?.filename || "Saved resume";
+    const uploadedAt = data.resume?.uploaded_at || "";
+
+    if(status){
+      status.innerHTML = `
+        Resume already uploaded:
+        <strong>${escapeHTML(filename)}</strong>
+        ${uploadedAt ? `<br><small>Uploaded: ${escapeHTML(uploadedAt)}</small>` : ""}
+      `;
+    }
+
+    renderSkillTags(data.skills || data.resume?.keywords || []);
+
+  }catch(error){
+    if(status){
+      status.textContent = "Could not connect to backend.";
+    }
+
+    logApi("SAVED RESUME ERROR", { error:error.message });
+  }
 }
 
 
@@ -549,42 +624,73 @@ async function loadMatches(){
 
 
 function calculatePreferenceScore(job){
-  const jobTypePref = localStorage.getItem("ys_pref_job_type") || "";
-  const locationPref = localStorage.getItem("ys_pref_location") || "";
+  const careerInterest =
+    document.getElementById("careerInterest")?.value ||
+    "";
 
-  let score = 0.5;
+  const preferredJobType =
+    document.getElementById("preferredJobType")?.value ||
+    "";
+
+  const workStyle =
+    document.getElementById("workStyle")?.value ||
+    "";
+
+  const learningGoals =
+    document.getElementById("learningGoals")?.value ||
+    "";
+
+  let score = 0;
 
   const text = `
     ${job.title || ""}
     ${job.description || ""}
+    ${job.company || ""}
     ${job.job_type || ""}
-    ${job.city || ""}
-    ${job.location || ""}
   `.toLowerCase();
 
-  if(jobTypePref && text.includes(jobTypePref.toLowerCase())){
+  if(
+    careerInterest &&
+    text.includes(careerInterest.toLowerCase())
+  ){
+    score += 0.35;
+  }
+
+  if(
+    preferredJobType &&
+    text.includes(preferredJobType.toLowerCase())
+  ){
     score += 0.25;
   }
 
-  if(locationPref && text.includes(locationPref.toLowerCase())){
-    score += 0.25;
+  if(
+    workStyle &&
+    text.includes(workStyle.toLowerCase())
+  ){
+    score += 0.20;
+  }
+
+  if(
+    learningGoals &&
+    text.includes(learningGoals.toLowerCase())
+  ){
+    score += 0.20;
   }
 
   return Math.min(score, 1);
 }
 
-
 function getJobCategory(matchScore, prefScore){
-  if(prefScore >= 75 && matchScore >= 75){
-    return "High Preference + High Match";
+  if(prefScore >= 50 && matchScore >= 25){
+    return "Strong Preference + Good Match";
   }
 
-  if(prefScore >= 75 && matchScore < 75){
-    return "High Preference + Low Match";
+  if(prefScore >= 50){
+    return "Strong Preference + Needs Skills";
   }
 
-  if(prefScore < 75 && matchScore >= 75){
-    return "Low Preference + High Match";
+  if(matchScore >= 25){
+    return "Good Match + Low Preference";
   }
 
   return "Low Preference + Low Match";
@@ -605,6 +711,8 @@ function renderJobs(jobs){
   let totalFinal = 0;
 
   const html = jobs.map(job => {
+    const jobId = getJobId(job);
+
     const rawMatch =
       job.match_score ??
       job.similarity ??
@@ -631,45 +739,45 @@ function renderJobs(jobs){
 
     return `
       <div class="job-card">
-        <h3>${job.title || "Untitled Job"}</h3>
+        <h3>${escapeHTML(job.title || "Untitled Job")}</h3>
 
         <p class="muted">
-          ${job.company || "Unknown Company"}
+          ${escapeHTML(job.company || "Unknown Company")}
           ·
-          ${job.city || job.location || job.country || "Jamaica"}
+          ${escapeHTML(job.city || job.location || job.country || "Jamaica")}
         </p>
 
         <div class="score-row">
           <span class="score-pill">Match ${match}%</span>
           <span class="score-pill">Preference ${pref}%</span>
           <span class="score-pill">Final ${finalScore}%</span>
-          <span class="category-pill">${category}</span>
+          <span class="category-pill">${escapeHTML(category)}</span>
         </div>
 
         <p class="muted small">
-          ${job.description ? job.description.slice(0,180) + "..." : "No description available."}
+          ${job.description ? escapeHTML(job.description.slice(0,180)) + "..." : "No description available."}
         </p>
 
         <div class="job-actions">
           ${
             jobLink
             ? `
-              <a href="${jobLink}" target="_blank" class="btn primary-btn">
+              <a href="${escapeHTML(jobLink)}" target="_blank" class="btn primary-btn">
                 Apply Now
               </a>
             `
             : ""
           }
 
-          <button class="btn ghost-btn" onclick="viewJobDetails(${job.id})">
+          <button class="btn ghost-btn" onclick="viewJobDetails(${jobId})">
             View Details
           </button>
 
-          <button class="btn ghost-btn" onclick="runGuidance(${job.id})">
+          <button class="btn ghost-btn" onclick="runGuidance(${jobId})">
             Guidance Mode
           </button>
 
-          <button class="btn primary-btn" onclick="bookmarkJob(${job.id})">
+          <button class="btn primary-btn" onclick="bookmarkJob(${jobId})">
             Bookmark
           </button>
         </div>
@@ -704,37 +812,38 @@ async function viewJobDetails(jobId){
       return;
     }
 
+    const realJobId = getJobId(job);
     const jobLink = getJobLink(job);
 
     panel.innerHTML = `
-      <h3>${job.title || "Job Details"}</h3>
+      <h3>${escapeHTML(job.title || "Job Details")}</h3>
 
       <p class="muted">
-        ${job.company || "Unknown Company"}
+        ${escapeHTML(job.company || "Unknown Company")}
         ·
-        ${job.city || job.location || job.country || "Jamaica"}
+        ${escapeHTML(job.city || job.location || job.country || "Jamaica")}
       </p>
 
       <p style="margin-top:1rem;">
-        ${job.description || "No description available."}
+        ${escapeHTML(job.description || "No description available.")}
       </p>
 
       <div class="job-actions" style="margin-top:1.5rem;">
         ${
           jobLink
           ? `
-            <a href="${jobLink}" target="_blank" class="btn primary-btn">
+            <a href="${escapeHTML(jobLink)}" target="_blank" class="btn primary-btn">
               Apply Externally
             </a>
           `
           : ""
         }
 
-        <button class="btn ghost-btn" onclick="runGuidance(${job.id})">
+        <button class="btn ghost-btn" onclick="runGuidance(${realJobId})">
           Guidance Mode
         </button>
 
-        <button class="btn primary-btn" onclick="bookmarkJob(${job.id})">
+        <button class="btn primary-btn" onclick="bookmarkJob(${realJobId})">
           Bookmark
         </button>
       </div>
@@ -788,11 +897,11 @@ async function runGuidance(jobId){
     const missingSkills = data.missing_skills || [];
 
     panel.innerHTML = `
-      <h3>${data.job?.title || "Career Roadmap"}</h3>
+      <h3>${escapeHTML(data.job?.title || "Career Roadmap")}</h3>
 
       <div class="score-row">
         <span class="score-pill">Start ${Math.round(data.start_score || 0)}%</span>
-         <span class="score-pill">Final ${Math.round(data.final_score || 0)}%</span>
+        <span class="score-pill">Final ${Math.round(data.final_score || 0)}%</span>
         <span class="score-pill">${data.reached_target ? "Target Reached" : "Keep Improving"}</span>
       </div>
 
@@ -801,7 +910,7 @@ async function runGuidance(jobId){
       <div class="tag-list">
         ${
           missingSkills.length
-          ? missingSkills.map(skill => `<span class="tag">${skill}</span>`).join("")
+          ? missingSkills.map(skill => `<span class="tag">${escapeHTML(skill)}</span>`).join("")
           : `<span class="tag">No missing skills listed</span>`
         }
       </div>
@@ -815,7 +924,7 @@ async function runGuidance(jobId){
             <div class="pref">
               <span class="dot dot-1"></span>
               <div>
-                <p>Learn ${step.learn}</p>
+                <p>Learn ${escapeHTML(step.learn)}</p>
                 <small>
                   Improvement:
                   ${Math.round(step.improvement || 0)}%
@@ -868,8 +977,8 @@ async function loadCourses(jobId){
             <div class="pref">
               <span class="dot dot-3"></span>
               <div>
-                <p>${course.title || course.name || "Course"}</p>
-                <small>${course.platform || course.provider || "Kaggle / External"}</small>
+                <p>${escapeHTML(course.title || course.name || "Course")}</p>
+                <small>${escapeHTML(course.platform || course.provider || "Kaggle / External")}</small>
               </div>
             </div>
           `).join("")
@@ -939,22 +1048,26 @@ async function loadBookmarks(){
       return;
     }
 
-    box.innerHTML = bookmarks.map(job => `
-      <div class="job-card">
-        <h3>${job.title || "Saved Job"}</h3>
-        <p class="muted">${job.company || "Unknown Company"}</p>
+    box.innerHTML = bookmarks.map(job => {
+      const jobId = getJobId(job);
 
-        <div class="job-actions">
-          <button class="btn ghost-btn" onclick="runGuidance(${job.id || job.job_id})">
-            Guidance Mode
-          </button>
+      return `
+        <div class="job-card">
+          <h3>${escapeHTML(job.title || "Saved Job")}</h3>
+          <p class="muted">${escapeHTML(job.company || "Unknown Company")}</p>
 
-          <button class="btn primary-btn" onclick="removeBookmark(${job.id || job.job_id})">
-            Remove
-          </button>
+          <div class="job-actions">
+            <button class="btn ghost-btn" onclick="runGuidance(${jobId})">
+              Guidance Mode
+            </button>
+
+            <button class="btn primary-btn" onclick="removeBookmark(${jobId})">
+              Remove
+            </button>
+          </div>
         </div>
-      </div>
-    `).join("");
+      `;
+    }).join("");
 
   }catch(error){
     box.innerHTML = `<p class="muted">Could not load bookmarks.</p>`;
@@ -985,7 +1098,7 @@ async function removeBookmark(jobId){
 // ===============================
 // RESTORE LOGIN STATE
 // ===============================
-window.addEventListener("load", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   const token = getToken();
   const userName = localStorage.getItem("ys_user_name");
 
@@ -997,7 +1110,9 @@ window.addEventListener("load", () => {
     }
 
     showDashboard();
-    loadMatches();
-    loadBookmarks();
+
+    await loadSavedResume();
+    await loadMatches();
+    await loadBookmarks();
   }
 });

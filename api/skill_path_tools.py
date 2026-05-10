@@ -1,7 +1,10 @@
 # skill_path_tools.py
 
+import os
 import heapq
 import logging
+
+from dotenv import load_dotenv
 from mysql.connector.pooling import MySQLConnectionPool
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -12,6 +15,8 @@ from cosine_matcher import (
     get_job_text_by_id,
 )
 
+load_dotenv()
+
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -19,11 +24,11 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 DB_CONFIG = {
-    "host": "127.0.0.1",
-    "user": "root",
-    "password": "",
-    "database": "youthsmart",
-    "port": 3306,
+    "host": os.getenv("DB_HOST", "127.0.0.1"),
+    "user": os.getenv("DB_USER", "root"),
+    "password": os.getenv("DB_PASSWORD", ""),
+    "database": os.getenv("DB_NAME", "youthsmart"),
+    "port": int(os.getenv("DB_PORT", 3306)),
     "pool_name": "ysja_pool",
     "pool_size": 5,
 }
@@ -247,12 +252,13 @@ PREREQUISITES: dict[str, set[str]] = {
     "mongodb": {"sql"},
 }
 
-BEAM_WIDTH = 8
+#  speed improvement: lower beam width.
+BEAM_WIDTH = 4
+
 SKILL_LEARN_REPEAT = 4
 
-# Minimum cosine improvement required before a skill is accepted.
-# This prevents tiny improvements like 0.0002 from entering the path.
-MIN_IMPROVEMENT_THRESHOLD = 0.0
+#  ignore tiny useless skill improvements.
+MIN_IMPROVEMENT_THRESHOLD = 0.01
 
 
 # ---------------------------------------------------------------------------
@@ -279,10 +285,6 @@ def is_software_context(job_text: str) -> bool:
 
 
 def filter_candidate_skills_for_context(candidate_skills: list[str], job_text: str) -> list[str]:
-    """
-    Removes clearly irrelevant skills for software/technical jobs.
-    Example: retail should not be recommended for Java backend roles.
-    """
     if not is_software_context(job_text):
         return candidate_skills
 
@@ -293,10 +295,6 @@ def filter_candidate_skills_for_context(candidate_skills: list[str], job_text: s
 
 
 def get_skill_priority(skill: str, job_text: str = "") -> float:
-    """
-    Lower multiplier = preferred by Dijkstra.
-    Higher multiplier = less preferred.
-    """
     skill = normalise_skill(skill)
 
     if is_software_context(job_text) and skill in IRRELEVANT_SOFTWARE_SKILLS:
@@ -312,14 +310,6 @@ def get_skill_priority(skill: str, job_text: str = "") -> float:
 
 
 def compute_edge_weight(skill: str, improvement: float, job_text: str = "") -> float | None:
-    """
-    Lower cost = preferred by Dijkstra.
-
-    Combines:
-    - base learning difficulty
-    - cosine improvement
-    - skill priority/type
-    """
     if improvement < MIN_IMPROVEMENT_THRESHOLD:
         return None
 
@@ -384,10 +374,12 @@ class _PathScorer:
         superset_doc = (self.resume_clean + " " + " ".join(self.skills)).strip()
         corpus = [superset_doc, self.job_clean]
 
+        # Teammate's speed improvement:
+        # unigram only + fewer max features.
         self.vectorizer = TfidfVectorizer(
             stop_words="english",
-            ngram_range=(1, 2),
-            max_features=3000,
+            ngram_range=(1, 1),
+            max_features=1000,
         )
 
         self.vectorizer.fit(corpus)
@@ -429,6 +421,7 @@ def dijkstra_skill_path(
             "final_score": 0,
             "path": [],
             "missing_skills": [],
+            "remaining_missing_skills": [],
             "already_have": [],
             "reached_target": False,
         }
@@ -436,13 +429,12 @@ def dijkstra_skill_path(
     already_have = skills_already_in_resume(resume_text, candidate_skills)
     skills_to_search = [s for s in candidate_skills if s not in already_have]
 
-    scorer = _PathScorer(resume_text, job_text, skills_to_search)
-
     total_skills = len(candidate_skills)
 
     def skill_overlap_score(current_skillset: frozenset) -> float:
         if total_skills == 0:
             return 0.0
+
         have = len(already_have) + len(current_skillset)
         return have / total_skills
 
@@ -454,6 +446,7 @@ def dijkstra_skill_path(
             "final_score": round(start_score * 100),
             "path": [],
             "missing_skills": skills_to_search,
+            "remaining_missing_skills": skills_to_search,
             "already_have": sorted(already_have),
             "reached_target": start_score >= target_score,
         }
@@ -485,6 +478,7 @@ def dijkstra_skill_path(
         remaining = [s for s in skills_to_search if s not in current_node]
 
         candidates_scored = []
+
         for skill in remaining:
             if not prerequisites_met(skill, current_node):
                 continue
@@ -492,26 +486,16 @@ def dijkstra_skill_path(
             next_score = skill_overlap_score(current_node | {skill})
             improvement = next_score - current_score
 
-            if improvement >= MIN_IMPROVEMENT_THRESHOLD:
-                priority = get_skill_priority(skill, job_text)
-                candidates_scored.append((skill, improvement, next_score, priority))
+            edge_weight = compute_edge_weight(skill, improvement, job_text)
 
-        candidates_scored.sort(
-            key=lambda x: (
-                compute_edge_weight(x[0], x[1], job_text),
-                -x[1],
-            )
-        )
+            if edge_weight is not None:
+                candidates_scored.append((skill, improvement, next_score, edge_weight))
 
+        candidates_scored.sort(key=lambda x: (x[3], -x[1]))
         candidates = candidates_scored[:beam_width]
 
-        for skill, improvement, score_after, _priority in candidates:
+        for skill, improvement, score_after, edge_weight in candidates:
             next_node = frozenset(set(current_node) | {skill})
-
-            edge_weight = compute_edge_weight(skill, improvement, job_text)
-            if edge_weight is None:
-                continue
-
             new_cost = current_cost + edge_weight
 
             if next_node not in dist or new_cost < dist[next_node]:
@@ -525,6 +509,7 @@ def dijkstra_skill_path(
                     "step_cost": edge_weight,
                     "total_cost": new_cost,
                 }
+
                 counter += 1
                 heapq.heappush(pq, (new_cost, counter, next_node))
 
@@ -541,6 +526,7 @@ def dijkstra_skill_path(
             "final_score": round(start_score * 100),
             "path": [],
             "missing_skills": skills_to_search,
+            "remaining_missing_skills": skills_to_search,
             "already_have": sorted(already_have),
             "reached_target": False,
         }
@@ -550,6 +536,7 @@ def dijkstra_skill_path(
 
     while prev.get(node) is not None:
         step = prev[node]
+
         path.append({
             "learn": step["skill_learned"],
             "score": round(step["score_after"] * 100),
@@ -557,19 +544,30 @@ def dijkstra_skill_path(
             "step_cost": round(step["step_cost"], 2),
             "total_cost": round(step["total_cost"], 2),
         })
+
         node = step["previous_node"]
 
     path.reverse()
 
     final_score = round(skill_overlap_score(best_goal_node) * 100)
     learned_skills = set(best_goal_node)
-    missing_skills = [s for s in skills_to_search if s not in learned_skills]
+
+    remaining_missing_skills = [
+        s for s in skills_to_search
+        if s not in learned_skills
+    ]
 
     return {
         "start_score": round(start_score * 100),
         "final_score": final_score,
         "path": path,
-        "missing_skills": missing_skills,
+
+        # Original missing skills before the roadmap starts.
+        "missing_skills": skills_to_search,
+
+        # Skills still missing after the generated roadmap.
+        "remaining_missing_skills": remaining_missing_skills,
+
         "already_have": sorted(already_have),
         "reached_target": final_score >= round(target_score * 100),
     }
@@ -616,4 +614,5 @@ if __name__ == "__main__":
         job_id=job_id,
         target_score=0.30,
     )
+
     print(result)

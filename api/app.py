@@ -1,23 +1,25 @@
 # app.py
-# Flask server: upload UI + API endpoint to upload PDF/DOCX resumes
-# After upload, it also returns quick matches based on TF-IDF cosine similarity.
+# Flask server: upload UI + API endpoint to upload PDF/DOCX resumes.
+# After upload, it stores resume text/keywords and returns quick matches.
 
 import os
 import requests
 from datetime import timedelta
-from searchjobs import jobs_bp
-
 from flask import Flask, request, jsonify, render_template
 from flask_jwt_extended import JWTManager, get_jwt_identity
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
+from searchjobs import jobs_bp
+
 from resume_tools import (
     ALLOWED_EXTENSIONS,
     extract_text_from_pdf,
     extract_text_from_docx,
     save_resume_to_db,
+    get_latest_resume_for_user,
+    get_user_skill_tags,
 )
 
 from cosine_matcher import cosine_match_jobs
@@ -34,7 +36,6 @@ load_dotenv()
 
 # ---------------------------------------------------------------------------
 # n8n Webhook URL
-# Production URL from your active n8n workflow
 # ---------------------------------------------------------------------------
 N8N_WEBHOOK_URL = os.getenv(
     "N8N_WEBHOOK_URL",
@@ -66,6 +67,7 @@ app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "change-me")
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
 
 jwt = JWTManager(app)
+
 
 # ---------------------------------------------------------------------------
 # Token revocation check
@@ -110,6 +112,48 @@ def auth_test():
 @app.get("/upload")
 def upload_page():
     return render_template("upload.html")
+
+
+# ---------------------------------------------------------------------------
+# Resume Status — students/admin only
+# Lets frontend check if the user already has a saved resume.
+# ---------------------------------------------------------------------------
+@app.get("/api/resume/me")
+@roles_required("student", "admin")
+def get_my_resume():
+    user_id = int(get_jwt_identity())
+
+    resume = get_latest_resume_for_user(user_id)
+    skills = get_user_skill_tags(user_id)
+
+    if not resume:
+        return jsonify({
+            "ok": True,
+            "has_resume": False,
+            "resume": None,
+            "skills": []
+        })
+
+    keywords = []
+
+    if resume.get("keywords"):
+        keywords = [
+            k.strip()
+            for k in resume["keywords"].split(",")
+            if k.strip()
+        ]
+
+    return jsonify({
+        "ok": True,
+        "has_resume": True,
+        "resume": {
+            "id": resume["id"],
+            "filename": resume["filename"],
+            "uploaded_at": str(resume["uploaded_at"]),
+            "keywords": keywords
+        },
+        "skills": skills or keywords
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +261,6 @@ def get_skill_path(job_id):
         target_score=target_score
     )
 
-    # Return both nested and direct fields so frontend can read it easily.
     return jsonify({
         "ok": True,
         "result": result,
@@ -236,25 +279,21 @@ def get_guidance_courses(job_id):
 
     target_score = float(request.args.get("target_score", 0.30))
 
-    # 1. Generate skill path using your Dijkstra-style algorithm
     skill_path_result = recommend_skill_path_for_job(
         user_id=user_id,
         job_id=job_id,
         target_score=target_score
     )
 
-    # 2. Extract skills from the Dijkstra path
     skills = [
         step["learn"]
         for step in skill_path_result.get("path", [])
         if step.get("learn")
     ]
 
-    # 3. Fallback to missing_skills if path is empty
     if not skills:
         skills = skill_path_result.get("missing_skills", [])
 
-    # 4. If no skills are missing, return clean response
     if not skills:
         return jsonify({
             "ok": True,
@@ -267,7 +306,6 @@ def get_guidance_courses(job_id):
             }
         })
 
-    # 5. Send missing skills to n8n
     try:
         n8n_response = requests.post(
             N8N_WEBHOOK_URL,
@@ -292,14 +330,12 @@ def get_guidance_courses(job_id):
             "courses": []
         }), 502
 
-    # 6. Extract courses from n8n response
     courses = (
         n8n_data.get("courses")
         or n8n_data.get("recommendations")
         or []
     )
 
-    # 7. Return data in a frontend-friendly format
     return jsonify({
         "ok": True,
         "skill_path": skill_path_result,
@@ -347,6 +383,7 @@ def upload_resume_file():
             raw_text = extract_text_from_pdf(f.stream)
         else:
             raw_text = extract_text_from_docx(f.stream)
+
     except Exception:
         return jsonify({
             "ok": False,
