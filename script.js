@@ -79,7 +79,7 @@ function getJobLink(job){
 const navToggle = document.querySelector(".nav-toggle");
 const navLinks = document.querySelector(".nav-links");
 
-if(navToggle){
+if(navToggle && navLinks){
   navToggle.addEventListener("click", () => {
     navLinks.classList.toggle("open");
   });
@@ -87,7 +87,9 @@ if(navToggle){
 
 document.querySelectorAll(".nav-links a").forEach(link => {
   link.addEventListener("click", () => {
-    navLinks.classList.remove("open");
+    if(navLinks){
+      navLinks.classList.remove("open");
+    }
   });
 });
 
@@ -235,7 +237,11 @@ document.querySelectorAll(".auth-tab").forEach(tab => {
       ? "loginForm"
       : "registerForm";
 
-    document.getElementById(formId).classList.add("active");
+    const form = document.getElementById(formId);
+
+    if(form){
+      form.classList.add("active");
+    }
   });
 });
 
@@ -250,16 +256,32 @@ if(registerForm){
     event.preventDefault();
 
     const payload = {
-      full_name: document.getElementById("registerName").value.trim(),
-      email: document.getElementById("registerEmail").value.trim(),
-      password: document.getElementById("registerPassword").value,
-      role: document.getElementById("registerRole").value,
+      full_name:
+        document.getElementById("registerName")?.value?.trim() || "",
 
-      career_interest: document.getElementById("careerInterest").value.trim(),
-      preferred_job_type: document.getElementById("preferredJobType").value,
-      work_style: document.getElementById("workStyle").value,
-      availability: document.getElementById("availability").value,
-      learning_goals: document.getElementById("learningGoals").value.trim()
+      email:
+        document.getElementById("registerEmail")?.value?.trim() || "",
+
+      password:
+        document.getElementById("registerPassword")?.value || "",
+
+      role:
+        document.getElementById("registerRole")?.value || "student",
+
+      career_interest:
+        document.getElementById("careerInterest")?.value?.trim() || "",
+
+      preferred_job_type:
+        document.getElementById("preferredJobType")?.value || "",
+
+      work_style:
+        document.getElementById("workStyle")?.value || "",
+
+      availability:
+        document.getElementById("availability")?.value || "",
+
+      learning_goals:
+        document.getElementById("learningGoals")?.value?.trim() || ""
     };
 
     try{
@@ -280,12 +302,20 @@ if(registerForm){
         return;
       }
 
-      showMessage("Account created. Now login.");
-      document.querySelector('[data-tab="login"]').click();
+      showMessage("Account created successfully. Now login.");
+
+      const loginTab = document.querySelector('[data-tab="login"]');
+
+      if(loginTab){
+        loginTab.click();
+      }
 
     }catch(error){
       showMessage("Could not connect to backend.");
-      logApi("REGISTER ERROR", { error:error.message });
+
+      logApi("REGISTER ERROR", {
+        error:error.message
+      });
     }
   });
 }
@@ -301,8 +331,8 @@ if(loginForm){
     event.preventDefault();
 
     const payload = {
-      email: document.getElementById("loginEmail").value,
-      password: document.getElementById("loginPassword").value
+      email: document.getElementById("loginEmail")?.value || "",
+      password: document.getElementById("loginPassword")?.value || ""
     };
 
     try{
@@ -390,7 +420,7 @@ if(uploadResumeBtn){
     const fileInput = document.getElementById("resumeFile");
     const status = document.getElementById("resumeStatus");
 
-    if(!fileInput.files.length){
+    if(!fileInput || !fileInput.files.length){
       alert("Choose a resume first.");
       return;
     }
@@ -529,8 +559,14 @@ const savePrefsBtn = document.getElementById("savePrefsBtn");
 
 if(savePrefsBtn){
   savePrefsBtn.addEventListener("click", () => {
-    const jobType = document.getElementById("jobTypePref").value;
-    const location = document.getElementById("locationPref").value;
+    const jobType =
+      document.getElementById("jobTypePref")?.value ||
+      document.getElementById("preferredJobType")?.value ||
+      "";
+
+    const location =
+      document.getElementById("locationPref")?.value ||
+      "";
 
     localStorage.setItem("ys_pref_job_type", jobType);
     localStorage.setItem("ys_pref_location", location);
@@ -548,7 +584,9 @@ const searchJobsBtn = document.getElementById("searchJobsBtn");
 
 if(searchJobsBtn){
   searchJobsBtn.addEventListener("click", async () => {
-    const query = document.getElementById("jobSearchInput").value || "software";
+    const query =
+      document.getElementById("jobSearchInput")?.value ||
+      "software";
 
     const feed = document.getElementById("jobFeed");
 
@@ -630,6 +668,8 @@ function calculatePreferenceScore(job){
 
   const preferredJobType =
     document.getElementById("preferredJobType")?.value ||
+    document.getElementById("jobTypePref")?.value ||
+    localStorage.getItem("ys_pref_job_type") ||
     "";
 
   const workStyle =
@@ -647,6 +687,9 @@ function calculatePreferenceScore(job){
     ${job.description || ""}
     ${job.company || ""}
     ${job.job_type || ""}
+    ${job.city || ""}
+    ${job.location || ""}
+    ${job.country || ""}
   `.toLowerCase();
 
   if(
@@ -679,6 +722,7 @@ function calculatePreferenceScore(job){
 
   return Math.min(score, 1);
 }
+
 
 function getJobCategory(matchScore, prefScore){
   if(prefScore >= 50 && matchScore >= 25){
@@ -955,6 +999,8 @@ async function runGuidance(jobId){
 // ===============================
 async function loadCourses(jobId){
   const panel = document.getElementById("guidancePanel");
+
+  if(!panel) return;
 
   try{
     const res = await fetch(`${API_BASE}/api/jobs/${jobId}/guidance-courses`, {
