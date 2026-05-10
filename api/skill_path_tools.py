@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 DB_CONFIG = {
     "host": "127.0.0.1",
     "user": "root",
-    "password": ";-;OtatOXD=P",
+    "password": "",
     "database": "youthsmart",
     "port": 3308,
     "pool_name": "ysja_pool",
@@ -252,7 +252,7 @@ SKILL_LEARN_REPEAT = 4
 
 # Minimum cosine improvement required before a skill is accepted.
 # This prevents tiny improvements like 0.0002 from entering the path.
-MIN_IMPROVEMENT_THRESHOLD = 0.005
+MIN_IMPROVEMENT_THRESHOLD = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -437,7 +437,16 @@ def dijkstra_skill_path(
     skills_to_search = [s for s in candidate_skills if s not in already_have]
 
     scorer = _PathScorer(resume_text, job_text, skills_to_search)
-    start_score = scorer.score(frozenset())
+
+    total_skills = len(candidate_skills)
+
+    def skill_overlap_score(current_skillset: frozenset) -> float:
+        if total_skills == 0:
+            return 0.0
+        have = len(already_have) + len(current_skillset)
+        return have / total_skills
+
+    start_score = skill_overlap_score(frozenset())
 
     if start_score >= target_score or not skills_to_search:
         return {
@@ -467,7 +476,7 @@ def dijkstra_skill_path(
             continue
 
         visited.add(current_node)
-        current_score = scorer.score(current_node)
+        current_score = skill_overlap_score(current_node)
 
         if current_score >= target_score:
             best_goal_node = current_node
@@ -480,7 +489,7 @@ def dijkstra_skill_path(
             if not prerequisites_met(skill, current_node):
                 continue
 
-            next_score = scorer.score(current_node | {skill})
+            next_score = skill_overlap_score(current_node | {skill})
             improvement = next_score - current_score
 
             if improvement >= MIN_IMPROVEMENT_THRESHOLD:
@@ -522,7 +531,7 @@ def dijkstra_skill_path(
     if best_goal_node is None and dist:
         best_goal_node = max(
             dist.keys(),
-            key=lambda n: (scorer.score(n), -dist[n]),
+            key=lambda n: (skill_overlap_score(n), -dist[n]),
         )
         log.warning("Target score not reached. Returning best partial path.")
 
@@ -552,7 +561,7 @@ def dijkstra_skill_path(
 
     path.reverse()
 
-    final_score = round(scorer.score(best_goal_node) * 100)
+    final_score = round(skill_overlap_score(best_goal_node) * 100)
     learned_skills = set(best_goal_node)
     missing_skills = [s for s in skills_to_search if s not in learned_skills]
 
@@ -573,7 +582,7 @@ def dijkstra_skill_path(
 def recommend_skill_path_for_job(
     user_id: int,
     job_id: int,
-    target_score: float = 0.30,
+    target_score: float = 1.0,
 ) -> dict:
     resume_text = get_latest_resume_text(user_id)
     job_text = get_job_text_by_id(job_id)
