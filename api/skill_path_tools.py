@@ -255,6 +255,7 @@ PREREQUISITES: dict[str, set[str]] = {
 #  speed improvement: lower beam width.
 BEAM_WIDTH = 4
 
+BEAM_WIDTH = 4
 SKILL_LEARN_REPEAT = 4
 
 #  ignore tiny useless skill improvements.
