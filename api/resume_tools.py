@@ -1,11 +1,15 @@
 # Resume file parsing + keyword extraction + DB insert + quick matching against stored job keywords
 
+import os
 import mysql.connector
+from dotenv import load_dotenv
 from sklearn.feature_extraction.text import TfidfVectorizer
 from pypdf import PdfReader
 from docx import Document
 
-from text_cleaning import clean_text, EXTRA_NOISE_WORDS, TECH_NORMALIZATION
+from text_cleaning import clean_text, EXTRA_NOISE_WORDS
+
+load_dotenv()
 
 DB_CONFIG = {
     "host": "127.0.0.1",
@@ -67,6 +71,7 @@ def extract_keywords_single_doc(text: str, top_n: int = 40):
     Keyword extraction for ONE resume doc.
     """
     text = clean_text(text)
+
     if not text:
         return []
 
@@ -89,11 +94,13 @@ def extract_keywords_single_doc(text: str, top_n: int = 40):
         if score <= 0:
             continue
 
-        term = term.strip()
+        term = term.strip().lower()
+
         if not term:
             continue
 
         parts = term.split()
+
         if all(part in EXTRA_NOISE_WORDS for part in parts):
             continue
 
@@ -111,18 +118,25 @@ def extract_keywords_single_doc(text: str, top_n: int = 40):
 def extract_text_from_pdf(file_obj) -> str:
     reader = PdfReader(file_obj)
     out = []
+
     for page in reader.pages:
         out.append(page.extract_text() or "")
+
     return "\n".join(out).strip()
 
 
 def extract_text_from_docx(file_obj) -> str:
     doc = Document(file_obj)
     parts = [p.text for p in doc.paragraphs if p.text and p.text.strip()]
+
     return "\n".join(parts).strip()
 
 
 def save_resume_to_db(*, student_id, user_id: int, filename: str, raw_text: str):
+    """
+    Saves the uploaded resume text and extracted keywords.
+    Also stores keyword/skill tags in the relational skills tables.
+    """
     kws = extract_keywords_single_doc(raw_text, top_n=40)
     kws_csv = ",".join(kws)
 
@@ -140,10 +154,10 @@ def save_resume_to_db(*, student_id, user_id: int, filename: str, raw_text: str)
 
         resume_id = cur.lastrowid
 
-        # NEW: also save extracted keywords into relational skill tables
         save_user_skills(cur, user_id, kws)
 
         db.commit()
+
         return resume_id, kws
 
     except Exception:
@@ -156,19 +170,57 @@ def save_resume_to_db(*, student_id, user_id: int, filename: str, raw_text: str)
 
 
 def get_latest_resume_keywords(user_id: int) -> str:
+    """
+    Returns the latest uploaded resume keyword CSV for a user.
+    """
     db = get_db()
     cur = db.cursor()
-    cur.execute("""
-        SELECT COALESCE(keywords,'')
-        FROM resumes
-        WHERE user_id=%s
-        ORDER BY id DESC
-        LIMIT 1
-    """, (user_id,))
-    row = cur.fetchone()
-    cur.close()
-    db.close()
-    return row[0] if row else ""
+
+    try:
+        cur.execute(
+            """
+            SELECT COALESCE(keywords, '')
+            FROM resumes
+            WHERE user_id = %s
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (user_id,)
+        )
+
+        row = cur.fetchone()
+        return row[0] if row else ""
+
+    finally:
+        cur.close()
+        db.close()
+
+
+def get_latest_resume_for_user(user_id: int):
+    """
+    Returns metadata and keywords for the user's latest uploaded resume.
+    Used by the frontend to show whether a resume is already saved.
+    """
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+
+    try:
+        cur.execute(
+            """
+            SELECT id, filename, keywords, uploaded_at
+            FROM resumes
+            WHERE user_id = %s
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (user_id,)
+        )
+
+        return cur.fetchone()
+
+    finally:
+        cur.close()
+        db.close()
 
 
 def get_user_skill_tags(user_id: int):
@@ -207,25 +259,39 @@ def recommend_jobs_by_keyword_overlap(user_id: int, limit: int = 10):
     """
     resume_kw_csv = get_latest_resume_keywords(user_id)
     rset = set(k.strip().lower() for k in resume_kw_csv.split(",") if k.strip())
+
     if not rset:
         return []
 
     db = get_db()
     cur = db.cursor(dictionary=True)
-    cur.execute("""
-        SELECT id, title, company, city, country, is_remote,
-               apply_link, salary_text, salary_min, salary_max, salary_currency, salary_period,
-               keywords
-        FROM jobs
-        WHERE keywords IS NOT NULL AND keywords <> ''
-    """)
-    jobs = cur.fetchall()
-    cur.close()
-    db.close()
+
+    try:
+        cur.execute(
+            """
+            SELECT id, title, company, city, country, is_remote,
+                   apply_link, salary_text, salary_min, salary_max,
+                   salary_currency, salary_period, keywords
+            FROM jobs
+            WHERE keywords IS NOT NULL AND keywords <> ''
+            """
+        )
+
+        jobs = cur.fetchall()
+
+    finally:
+        cur.close()
+        db.close()
 
     scored = []
+
     for j in jobs:
-        jset = set(k.strip().lower() for k in (j["keywords"] or "").split(",") if k.strip())
+        jset = set(
+            k.strip().lower()
+            for k in (j["keywords"] or "").split(",")
+            if k.strip()
+        )
+
         if not jset:
             continue
 
@@ -247,8 +313,9 @@ def recommend_jobs_by_keyword_overlap(user_id: int, limit: int = 10):
                 "salary_currency": j["salary_currency"],
                 "salary_period": j["salary_period"],
                 "score": round(score, 4),
-                "matched_keywords": matched[:15]
+                "matched_keywords": matched[:15],
             })
 
     scored.sort(key=lambda x: x["score"], reverse=True)
+
     return scored[:limit]

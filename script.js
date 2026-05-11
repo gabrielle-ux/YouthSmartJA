@@ -15,6 +15,15 @@ function authHeaders(){
     : {};
 }
 
+function escapeHTML(value){
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function logApi(title, data){
   const log = document.getElementById("apiLog");
 
@@ -48,6 +57,10 @@ function hideDashboard(){
   }
 }
 
+function getJobId(job){
+  return job.id || job.job_id;
+}
+
 function getJobLink(job){
   return (
     job.apply_link ||
@@ -66,7 +79,7 @@ function getJobLink(job){
 const navToggle = document.querySelector(".nav-toggle");
 const navLinks = document.querySelector(".nav-links");
 
-if(navToggle){
+if(navToggle && navLinks){
   navToggle.addEventListener("click", () => {
     navLinks.classList.toggle("open");
   });
@@ -74,7 +87,9 @@ if(navToggle){
 
 document.querySelectorAll(".nav-links a").forEach(link => {
   link.addEventListener("click", () => {
-    navLinks.classList.remove("open");
+    if(navLinks){
+      navLinks.classList.remove("open");
+    }
   });
 });
 
@@ -222,7 +237,11 @@ document.querySelectorAll(".auth-tab").forEach(tab => {
       ? "loginForm"
       : "registerForm";
 
-    document.getElementById(formId).classList.add("active");
+    const form = document.getElementById(formId);
+
+    if(form){
+      form.classList.add("active");
+    }
   });
 });
 
@@ -237,10 +256,32 @@ if(registerForm){
     event.preventDefault();
 
     const payload = {
-      full_name: document.getElementById("registerName").value,
-      email: document.getElementById("registerEmail").value,
-      password: document.getElementById("registerPassword").value,
-      role: document.getElementById("registerRole").value
+      full_name:
+        document.getElementById("registerName")?.value?.trim() || "",
+
+      email:
+        document.getElementById("registerEmail")?.value?.trim() || "",
+
+      password:
+        document.getElementById("registerPassword")?.value || "",
+
+      role:
+        document.getElementById("registerRole")?.value || "student",
+
+      career_interest:
+        document.getElementById("careerInterest")?.value?.trim() || "",
+
+      preferred_job_type:
+        document.getElementById("preferredJobType")?.value || "",
+
+      work_style:
+        document.getElementById("workStyle")?.value || "",
+
+      availability:
+        document.getElementById("availability")?.value || "",
+
+      learning_goals:
+        document.getElementById("learningGoals")?.value?.trim() || ""
     };
 
     try{
@@ -261,12 +302,20 @@ if(registerForm){
         return;
       }
 
-      showMessage("Account created. Now login.");
-      document.querySelector('[data-tab="login"]').click();
+      showMessage("Account created successfully. Now login.");
+
+      const loginTab = document.querySelector('[data-tab="login"]');
+
+      if(loginTab){
+        loginTab.click();
+      }
 
     }catch(error){
       showMessage("Could not connect to backend.");
-      logApi("REGISTER ERROR", { error:error.message });
+
+      logApi("REGISTER ERROR", {
+        error:error.message
+      });
     }
   });
 }
@@ -282,8 +331,8 @@ if(loginForm){
     event.preventDefault();
 
     const payload = {
-      email: document.getElementById("loginEmail").value,
-      password: document.getElementById("loginPassword").value
+      email: document.getElementById("loginEmail")?.value || "",
+      password: document.getElementById("loginPassword")?.value || ""
     };
 
     try{
@@ -329,6 +378,7 @@ if(loginForm){
       showMessage("Login successful.");
       showDashboard();
 
+      await loadSavedResume();
       await loadMatches();
       await loadBookmarks();
 
@@ -370,7 +420,7 @@ if(uploadResumeBtn){
     const fileInput = document.getElementById("resumeFile");
     const status = document.getElementById("resumeStatus");
 
-    if(!fileInput.files.length){
+    if(!fileInput || !fileInput.files.length){
       alert("Choose a resume first.");
       return;
     }
@@ -405,7 +455,7 @@ if(uploadResumeBtn){
         status.textContent = "Resume uploaded successfully.";
       }
 
-      renderSkillTags(data.keywords || data.skills || data.resume_keywords || []);
+      await loadSavedResume();
       await loadMatches();
 
     }catch(error){
@@ -442,8 +492,63 @@ function renderSkillTags(skills){
 
   box.innerHTML = skills
     .slice(0,20)
-    .map(skill => `<span class="tag">${skill}</span>`)
+    .map(skill => `<span class="tag">${escapeHTML(skill)}</span>`)
     .join("");
+}
+
+
+async function loadSavedResume(){
+  const status = document.getElementById("resumeStatus");
+
+  if(!getToken()){
+    return;
+  }
+
+  try{
+    const res = await fetch(`${API_BASE}/api/resume/me`, {
+      headers:authHeaders()
+    });
+
+    const data = await res.json();
+
+    logApi("SAVED RESUME RESPONSE", data);
+
+    if(!res.ok || !data.ok){
+      if(status){
+        status.textContent = "Could not check saved resume.";
+      }
+      return;
+    }
+
+    if(!data.has_resume){
+      if(status){
+        status.textContent = "No resume uploaded yet.";
+      }
+
+      renderSkillTags([]);
+      return;
+    }
+
+    const filename = data.resume?.filename || "Saved resume";
+    const uploadedAt = data.resume?.uploaded_at || "";
+
+    if(status){
+      status.innerHTML = `
+        Resume already uploaded:
+        <strong>${escapeHTML(filename)}</strong>
+        ${uploadedAt ? `<br><small>Uploaded: ${escapeHTML(uploadedAt)}</small>` : ""}
+      `;
+    }
+
+    renderSkillTags(data.skills || data.resume?.keywords || []);
+
+  }catch(error){
+    if(status){
+      status.textContent = "Could not connect to backend.";
+    }
+
+    logApi("SAVED RESUME ERROR", { error:error.message });
+  }
 }
 
 
@@ -454,8 +559,14 @@ const savePrefsBtn = document.getElementById("savePrefsBtn");
 
 if(savePrefsBtn){
   savePrefsBtn.addEventListener("click", () => {
-    const jobType = document.getElementById("jobTypePref").value;
-    const location = document.getElementById("locationPref").value;
+    const jobType =
+      document.getElementById("jobTypePref")?.value ||
+      document.getElementById("preferredJobType")?.value ||
+      "";
+
+    const location =
+      document.getElementById("locationPref")?.value ||
+      "";
 
     localStorage.setItem("ys_pref_job_type", jobType);
     localStorage.setItem("ys_pref_location", location);
@@ -473,7 +584,9 @@ const searchJobsBtn = document.getElementById("searchJobsBtn");
 
 if(searchJobsBtn){
   searchJobsBtn.addEventListener("click", async () => {
-    const query = document.getElementById("jobSearchInput").value || "software";
+    const query =
+      document.getElementById("jobSearchInput")?.value ||
+      "software";
 
     const feed = document.getElementById("jobFeed");
 
@@ -549,25 +662,62 @@ async function loadMatches(){
 
 
 function calculatePreferenceScore(job){
-  const jobTypePref = localStorage.getItem("ys_pref_job_type") || "";
-  const locationPref = localStorage.getItem("ys_pref_location") || "";
+  const careerInterest =
+    document.getElementById("careerInterest")?.value ||
+    "";
 
-  let score = 0.5;
+  const preferredJobType =
+    document.getElementById("preferredJobType")?.value ||
+    document.getElementById("jobTypePref")?.value ||
+    localStorage.getItem("ys_pref_job_type") ||
+    "";
+
+  const workStyle =
+    document.getElementById("workStyle")?.value ||
+    "";
+
+  const learningGoals =
+    document.getElementById("learningGoals")?.value ||
+    "";
+
+  let score = 0;
 
   const text = `
     ${job.title || ""}
     ${job.description || ""}
+    ${job.company || ""}
     ${job.job_type || ""}
     ${job.city || ""}
     ${job.location || ""}
+    ${job.country || ""}
   `.toLowerCase();
 
-  if(jobTypePref && text.includes(jobTypePref.toLowerCase())){
+  if(
+    careerInterest &&
+    text.includes(careerInterest.toLowerCase())
+  ){
+    score += 0.35;
+  }
+
+  if(
+    preferredJobType &&
+    text.includes(preferredJobType.toLowerCase())
+  ){
     score += 0.25;
   }
 
-  if(locationPref && text.includes(locationPref.toLowerCase())){
-    score += 0.25;
+  if(
+    workStyle &&
+    text.includes(workStyle.toLowerCase())
+  ){
+    score += 0.20;
+  }
+
+  if(
+    learningGoals &&
+    text.includes(learningGoals.toLowerCase())
+  ){
+    score += 0.20;
   }
 
   return Math.min(score, 1);
@@ -575,16 +725,16 @@ function calculatePreferenceScore(job){
 
 
 function getJobCategory(matchScore, prefScore){
-  if(prefScore >= 50 && matchScore >= 50){
-    return "High Preference + High Match";
+  if(prefScore >= 50 && matchScore >= 25){
+    return "Strong Preference + Good Match";
   }
 
-  if(prefScore >= 50 && matchScore < 50){
-    return "High Preference + Low Match";
+  if(prefScore >= 50){
+    return "Strong Preference + Needs Skills";
   }
 
-  if(prefScore < 50 && matchScore >= 50){
-    return "Low Preference + High Match";
+  if(matchScore >= 25){
+    return "Good Match + Low Preference";
   }
 
   return "Low Preference + Low Match";
@@ -605,6 +755,8 @@ function renderJobs(jobs){
   let totalFinal = 0;
 
   const html = jobs.map(job => {
+    const jobId = getJobId(job);
+
     const rawMatch =
       job.match_score ??
       job.similarity ??
@@ -631,45 +783,44 @@ function renderJobs(jobs){
 
     return `
       <div class="job-card">
-        <h3>${job.title || "Untitled Job"}</h3>
+        <h3>${escapeHTML(job.title || "Untitled Job")}</h3>
 
         <p class="muted">
-          ${job.company || "Unknown Company"}
+          ${escapeHTML(job.company || "Unknown Company")}
           ·
-          ${job.city || job.location || job.country || "Jamaica"}
+          ${escapeHTML(job.city || job.location || job.country || "Jamaica")}
         </p>
 
         <div class="score-row">
           <span class="score-pill">Match ${match}%</span>
           <span class="score-pill">Preference ${pref}%</span>
-          <span class="score-pill">Final ${finalScore}%</span>
-          <span class="category-pill">${category}</span>
+          <span class="category-pill">${escapeHTML(category)}</span>
         </div>
 
         <p class="muted small">
-          ${job.description ? job.description.slice(0,180) + "..." : "No description available."}
+          ${job.description ? escapeHTML(job.description.slice(0,180)) + "..." : "No description available."}
         </p>
 
         <div class="job-actions">
           ${
             jobLink
             ? `
-              <a href="${jobLink}" target="_blank" class="btn primary-btn">
+              <a href="${escapeHTML(jobLink)}" target="_blank" class="btn primary-btn">
                 Apply Now
               </a>
             `
             : ""
           }
 
-          <button class="btn ghost-btn" onclick="viewJobDetails(${job.id})">
+          <button class="btn ghost-btn" onclick="viewJobDetails(${jobId})">
             View Details
           </button>
 
-          <button class="btn ghost-btn" onclick="runGuidance(${job.id})">
+          <button class="btn ghost-btn" onclick="runGuidance(${jobId})">
             Guidance Mode
           </button>
 
-          <button class="btn primary-btn" onclick="bookmarkJob(${job.id})">
+          <button class="btn primary-btn" onclick="bookmarkJob(${jobId})">
             Bookmark
           </button>
         </div>
@@ -704,37 +855,38 @@ async function viewJobDetails(jobId){
       return;
     }
 
+    const realJobId = getJobId(job);
     const jobLink = getJobLink(job);
 
     panel.innerHTML = `
-      <h3>${job.title || "Job Details"}</h3>
+      <h3>${escapeHTML(job.title || "Job Details")}</h3>
 
       <p class="muted">
-        ${job.company || "Unknown Company"}
+        ${escapeHTML(job.company || "Unknown Company")}
         ·
-        ${job.city || job.location || job.country || "Jamaica"}
+        ${escapeHTML(job.city || job.location || job.country || "Jamaica")}
       </p>
 
       <p style="margin-top:1rem;">
-        ${job.description || "No description available."}
+        ${escapeHTML(job.description || "No description available.")}
       </p>
 
       <div class="job-actions" style="margin-top:1.5rem;">
         ${
           jobLink
           ? `
-            <a href="${jobLink}" target="_blank" class="btn primary-btn">
+            <a href="${escapeHTML(jobLink)}" target="_blank" class="btn primary-btn">
               Apply Externally
             </a>
           `
           : ""
         }
 
-        <button class="btn ghost-btn" onclick="runGuidance(${job.id})">
+        <button class="btn ghost-btn" onclick="runGuidance(${realJobId})">
           Guidance Mode
         </button>
 
-        <button class="btn primary-btn" onclick="bookmarkJob(${job.id})">
+        <button class="btn primary-btn" onclick="bookmarkJob(${realJobId})">
           Bookmark
         </button>
       </div>
@@ -763,6 +915,38 @@ function updateCareerReadiness(score){
 // ===============================
 // GUIDANCE MODE
 // ===============================
+// ===============================
+// GUIDANCE HELPERS
+// ===============================
+function costToTime(skillCost) {
+  if (skillCost <= 1.8)  return "~1–2 weeks";
+  if (skillCost <= 2.5)  return "~3–4 weeks";
+  if (skillCost <= 3.5)  return "~1–2 months";
+  if (skillCost <= 4.5)  return "~2–3 months";
+  if (skillCost <= 5.5)  return "~3–6 months";
+  if (skillCost <= 7.0)  return "~6–9 months";
+  return "~9–12 months";
+}
+
+const SOFT_SKILLS_FRONTEND = new Set([
+  "communication", "teamwork", "attention to detail", "problem solving",
+  "leadership", "time management", "critical thinking", "adaptability",
+  "professionalism", "organization", "public speaking", "presentation",
+  "research", "writing", "github", "word", "microsoft office",
+]);
+
+function filterSoftSkills(steps) {
+  return steps.filter(step => !SOFT_SKILLS_FRONTEND.has((step.learn || "").toLowerCase()));
+}
+
+function filterSoftSkillTags(skills) {
+  return skills.filter(s => !SOFT_SKILLS_FRONTEND.has((s || "").toLowerCase()));
+}
+
+
+// ===============================
+// GUIDANCE MODE
+// ===============================
 async function runGuidance(jobId){
   const panel = document.getElementById("guidancePanel");
 
@@ -784,43 +968,66 @@ async function runGuidance(jobId){
       return;
     }
 
-    const path = data.path || [];
-    const missingSkills = data.missing_skills || [];
+    const rawPath          = data.path || [];
+    const rawMissing       = data.missing_skills || [];
+    const alternativePaths = (data.alternative_paths || []).filter(a => !SOFT_SKILLS_FRONTEND.has((a.first_skill||"").toLowerCase()));
+    const pathsExplored    = data.paths_explored || 0;
+    const chosenCost       = data.chosen_path_cost || 0;
+
+    // Filter soft skills out of both lists
+    const path         = filterSoftSkills(rawPath);
+    const missingSkills = filterSoftSkillTags(rawMissing);
 
     panel.innerHTML = `
-      <h3>${data.job?.title || "Career Roadmap"}</h3>
+      <h3>${escapeHTML(data.job?.title || "Career Roadmap")}</h3>
 
       <div class="score-row">
         <span class="score-pill">Start ${Math.round(data.start_score || 0)}%</span>
-         <span class="score-pill">Final ${Math.round(data.final_score || 0)}%</span>
-        <span class="score-pill">${data.reached_target ? "Target Reached" : "Keep Improving"}</span>
+        <span class="score-pill">Final ${Math.round(data.final_score || 0)}%</span>
+        <span class="score-pill">${data.reached_target ? "✓ Target Reached" : "Keep Improving"}</span>
       </div>
 
-      <h3 class="sub">Missing Skills</h3>
+      ${pathsExplored > 0 ? `
+      <div style="
+        margin: 1rem 0;
+        padding: 0.75rem 1rem;
+        background: rgba(13,122,95,0.08);
+        border-left: 3px solid #2dc4b3;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        color: var(--text-muted, #8899a6);
+      ">
+        🔍 Dijkstra explored <strong style="color:#2dc4b3">${pathsExplored} skill combinations</strong>
+        and selected the most efficient learning path
+      </div>
+      ` : ""}
 
+      <h3 class="sub">Missing Skills</h3>
       <div class="tag-list">
         ${
           missingSkills.length
-          ? missingSkills.map(skill => `<span class="tag">${skill}</span>`).join("")
+          ? missingSkills.map(skill => `<span class="tag">${escapeHTML(skill)}</span>`).join("")
           : `<span class="tag">No missing skills listed</span>`
         }
       </div>
 
-      <h3 class="sub">Learning Roadmap</h3>
+      <h3 class="sub" style="margin-top:1.5rem">✅ Chosen Learning Path</h3>
+      <p style="font-size:0.8rem;color:var(--text-muted,#8899a6);margin:-0.4rem 0 0.8rem">
+        Optimal route selected from ${pathsExplored} explored combinations
+      </p>
 
       <div class="pref-list">
         ${
           path.length
-          ? path.map(step => `
-            <div class="pref">
+          ? path.map((step, i) => `
+            <div class="pref" style="border-left: 2px solid #2dc4b3; padding-left: 0.75rem;">
               <span class="dot dot-1"></span>
               <div>
-                <p>Learn ${step.learn}</p>
+                <p><strong>Step ${i + 1}:</strong> Learn ${escapeHTML(step.learn)}</p>
                 <small>
-                  Improvement:
-                  ${Math.round(step.improvement || 0)}%
-                 · Score:
-                  ${Math.round(step.score || 0)}%
+                  +${Math.round(step.improvement || 0)}% match improvement
+                  &nbsp;·&nbsp; Score after: ${Math.round(step.score || 0)}%
+                  &nbsp;·&nbsp; ⏱ ${costToTime(step.step_cost || 0)}
                 </small>
               </div>
             </div>
@@ -829,7 +1036,32 @@ async function runGuidance(jobId){
         }
       </div>
 
-      <button class="btn primary-btn" onclick="loadCourses(${jobId})">
+      ${alternativePaths.length ? `
+        <h3 class="sub" style="margin-top:1.5rem">❌ Paths Not Chosen</h3>
+        <p style="font-size:0.8rem;color:var(--text-muted,#8899a6);margin:-0.4rem 0 0.8rem">
+          These routes were explored but were less efficient
+        </p>
+        <div class="pref-list">
+          ${alternativePaths.map(alt => `
+            <div class="pref" style="border-left:2px solid #e74c3c;padding-left:0.75rem;opacity:0.7;">
+              <span class="dot" style="background:#e74c3c;width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:0.5rem;flex-shrink:0"></span>
+              <div>
+                <p style="text-decoration:line-through;color:var(--text-muted,#8899a6)">
+                  Start with: ${escapeHTML(alt.first_skill)}
+                </p>
+                <small>
+                  ⏱ ${costToTime(alt.cost || 0)}
+                  &nbsp;·&nbsp; Score after: ${alt.score_after || 0}%
+                  &nbsp;·&nbsp; +${alt.improvement || 0}% improvement
+                  &nbsp;·&nbsp; ${escapeHTML(alt.reason_rejected || "Not optimal")}
+                </small>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+
+      <button class="btn primary-btn" style="margin-top:1.5rem" onclick="loadCourses(${jobId})">
         Find Courses
       </button>
     `;
@@ -846,6 +1078,8 @@ async function runGuidance(jobId){
 // ===============================
 async function loadCourses(jobId){
   const panel = document.getElementById("guidancePanel");
+
+  if(!panel) return;
 
   try{
     const res = await fetch(`${API_BASE}/api/jobs/${jobId}/guidance-courses`, {
@@ -868,8 +1102,8 @@ async function loadCourses(jobId){
             <div class="pref">
               <span class="dot dot-3"></span>
               <div>
-                <p>${course.title || course.name || "Course"}</p>
-                <small>${course.platform || course.provider || "Kaggle / External"}</small>
+                <p>${escapeHTML(course.title || course.name || "Course")}</p>
+                <small>${escapeHTML(course.platform || course.provider || "Kaggle / External")}</small>
               </div>
             </div>
           `).join("")
@@ -939,22 +1173,26 @@ async function loadBookmarks(){
       return;
     }
 
-    box.innerHTML = bookmarks.map(job => `
-      <div class="job-card">
-        <h3>${job.title || "Saved Job"}</h3>
-        <p class="muted">${job.company || "Unknown Company"}</p>
+    box.innerHTML = bookmarks.map(job => {
+      const jobId = getJobId(job);
 
-        <div class="job-actions">
-          <button class="btn ghost-btn" onclick="runGuidance(${job.id || job.job_id})">
-            Guidance Mode
-          </button>
+      return `
+        <div class="job-card">
+          <h3>${escapeHTML(job.title || "Saved Job")}</h3>
+          <p class="muted">${escapeHTML(job.company || "Unknown Company")}</p>
 
-          <button class="btn primary-btn" onclick="removeBookmark(${job.id || job.job_id})">
-            Remove
-          </button>
+          <div class="job-actions">
+            <button class="btn ghost-btn" onclick="runGuidance(${jobId})">
+              Guidance Mode
+            </button>
+
+            <button class="btn primary-btn" onclick="removeBookmark(${jobId})">
+              Remove
+            </button>
+          </div>
         </div>
-      </div>
-    `).join("");
+      `;
+    }).join("");
 
   }catch(error){
     box.innerHTML = `<p class="muted">Could not load bookmarks.</p>`;
@@ -985,7 +1223,7 @@ async function removeBookmark(jobId){
 // ===============================
 // RESTORE LOGIN STATE
 // ===============================
-window.addEventListener("load", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   const token = getToken();
   const userName = localStorage.getItem("ys_user_name");
 
@@ -997,7 +1235,9 @@ window.addEventListener("load", () => {
     }
 
     showDashboard();
-    loadMatches();
-    loadBookmarks();
+
+    await loadSavedResume();
+    await loadMatches();
+    await loadBookmarks();
   }
 });

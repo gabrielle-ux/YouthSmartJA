@@ -278,102 +278,135 @@ def pick_apply_link(search_job: dict, details_row: dict | None):
 
 
 if __name__ == "__main__":
-    jobs_data = get_jobs(" Dentist", pages=2)
-    if not jobs_data:
-        raise SystemExit(1)
 
-    jobs = jobs_data.get("data", [])
-    print("Jobs returned:", len(jobs))
-    if not jobs:
-        raise SystemExit(0)
-
-    collected = []
-    for job in jobs:
-        title = job.get("job_title") or ""
-        company = job.get("employer_name") or ""
-        city = job.get("job_city")
-        country = job.get("job_country")
-        is_remote = bool(job.get("job_is_remote"))
-        source_job_id = str(job.get("job_id"))
-
-        details = get_job_details(source_job_id)
-        details_row = None
-        full_desc = ""
-
-        if details and details.get("data"):
-            details_row = details["data"][0]
-            full_desc = details_row.get("job_description") or ""
-
-        if not full_desc.strip():
-            full_desc = job.get("job_description") or ""
-
-        apply_link = pick_apply_link(job, details_row)
-        salary_text, salary_min, salary_max, salary_currency, salary_period, salary_source = pick_salary_fields(job, details_row)
-
-        print("\nTitle:", title)
-        print("Company:", company)
-        print("Apply:", (apply_link or "")[:120])
-        if salary_text or salary_min or salary_max:
-            print("Salary:", salary_text or f"{salary_min}-{salary_max} {salary_currency or ''} {salary_period or ''}".strip())
-        else:
-            print("Salary: (none listed)")
-
-        collected.append({
-            "source_job_id": source_job_id,
-            "title": title,
-            "company": company,
-            "city": city,
-            "country": country,
-            "is_remote": is_remote,
-            "apply_link": apply_link,
-            "description": full_desc,
-            "salary_text": salary_text,
-            "salary_min": salary_min,
-            "salary_max": salary_max,
-            "salary_currency": salary_currency,
-            "salary_period": salary_period,
-            "salary_source": salary_source
-        })
-
-    docs = [f"{x['title']} {x['description']}" for x in collected]
-    keywords_per_doc = build_keywords_for_docs(docs, top_n=25)
+    QUERIES = [
+        "software developer remote",
+        "backend developer remote",
+        "web developer Jamaica",
+        "python developer remote",
+        "full stack developer remote",
+        "react developer remote",
+        "junior software engineer remote",
+        "flask developer remote",
+        "javascript developer remote",
+        "junior web developer Jamaica",
+        "data analyst remote",
+        "junior developer Caribbean",
+        "api developer remote",
+        "django developer remote",
+        "node developer remote",
+    ]
 
     db = get_db()
     cur = db.cursor()
+    total_saved = 0
 
-    for x, kws in zip(collected, keywords_per_doc):
-        info = extract_info(x["description"])
-        keywords_str = ",".join(kws)
+    for query in QUERIES:
+        print(f"\n{'='*55}")
+        print(f"Fetching: {query}")
+        print('='*55)
 
-        db_job_id = upsert_job(
-            cur,
-            job_source="jsearch",
-            source_job_id=x["source_job_id"],
-            title=x["title"],
-            company=x["company"],
-            city=x["city"],
-            country=x["country"],
-            is_remote=x["is_remote"],
-            apply_link=x["apply_link"],
-            description=x["description"],
-            keywords=keywords_str,
-            salary_text=x["salary_text"],
-            salary_min=x["salary_min"],
-            salary_max=x["salary_max"],
-            salary_currency=x["salary_currency"],
-            salary_period=x["salary_period"],
-            salary_source=x["salary_source"]
-        )
+        jobs_data = get_jobs(query, pages=2)
 
-        refresh_many_kv(cur, "job_skills", db_job_id, "skill", info["skills"])
-        refresh_many_kv(cur, "job_certs", db_job_id, "cert", info["certifications"])
-        refresh_many_kv(cur, "job_degrees", db_job_id, "degree", info["degrees"])
-        refresh_many_kv(cur, "job_experience", db_job_id, "experience", info["experience"])
+        if not jobs_data:
+            print("No data returned, skipping.")
+            continue
 
-        print(f"Saved job_id={db_job_id} | keywords={len(kws)} | skills={len(info['skills'])}")
+        jobs = jobs_data.get("data", [])
+        print("Jobs returned:", len(jobs))
 
-    db.commit()
+        if not jobs:
+            continue
+
+        collected = []
+
+        for job in jobs:
+            title = job.get("job_title") or ""
+            company = job.get("employer_name") or ""
+            city = job.get("job_city")
+            country = job.get("job_country")
+            is_remote = bool(job.get("job_is_remote"))
+            source_job_id = str(job.get("job_id"))
+
+            details = get_job_details(source_job_id)
+            details_row = None
+            full_desc = ""
+
+            if details and details.get("data"):
+                details_row = details["data"][0]
+                full_desc = details_row.get("job_description") or ""
+
+            if not full_desc.strip():
+                full_desc = job.get("job_description") or ""
+
+            apply_link = pick_apply_link(job, details_row)
+            salary_text, salary_min, salary_max, salary_currency, salary_period, salary_source = pick_salary_fields(job, details_row)
+
+            print("\nTitle:", title)
+            print("Company:", company)
+            print("Apply:", (apply_link or "")[:120])
+
+            collected.append({
+                "source_job_id": source_job_id,
+                "title": title,
+                "company": company,
+                "city": city,
+                "country": country,
+                "is_remote": is_remote,
+                "apply_link": apply_link,
+                "description": full_desc,
+                "salary_text": salary_text,
+                "salary_min": salary_min,
+                "salary_max": salary_max,
+                "salary_currency": salary_currency,
+                "salary_period": salary_period,
+                "salary_source": salary_source
+            })
+
+        if not collected:
+            continue
+
+        docs = [f"{x['title']} {x['description']}" for x in collected]
+        keywords_per_doc = build_keywords_for_docs(docs, top_n=25)
+
+        for x, kws in zip(collected, keywords_per_doc):
+            info = extract_info(x["description"])
+            keywords_str = ",".join(kws)
+
+            db_job_id = upsert_job(
+                cur,
+                job_source="jsearch",
+                source_job_id=x["source_job_id"],
+                title=x["title"],
+                company=x["company"],
+                city=x["city"],
+                country=x["country"],
+                is_remote=x["is_remote"],
+                apply_link=x["apply_link"],
+                description=x["description"],
+                keywords=keywords_str,
+                salary_text=x["salary_text"],
+                salary_min=x["salary_min"],
+                salary_max=x["salary_max"],
+                salary_currency=x["salary_currency"],
+                salary_period=x["salary_period"],
+                salary_source=x["salary_source"]
+            )
+
+            refresh_many_kv(cur, "job_skills", db_job_id, "skill", info["skills"])
+            refresh_many_kv(cur, "job_certs", db_job_id, "cert", info["certifications"])
+            refresh_many_kv(cur, "job_degrees", db_job_id, "degree", info["degrees"])
+            refresh_many_kv(cur, "job_experience", db_job_id, "experience", info["experience"])
+
+            print(f"Saved job_id={db_job_id} | keywords={len(kws)} | skills={len(info['skills'])}")
+            total_saved += 1
+
+        db.commit()
+        print(f"\n✅ Query done. Total saved so far: {total_saved}")
+
+        # Small delay between queries to avoid rate limiting
+        time.sleep(2)
+
     cur.close()
     db.close()
-
-    print("\nSaved jobs to DB ✅ (salary + apply links included)")
+    print(f"\n✅ All done. Total jobs saved: {total_saved}")

@@ -195,18 +195,21 @@
       <input id="loginPassword" type="password" placeholder="Password" required>
       <button class="btn primary-btn" type="submit">Login</button>
     </form>
+<form id="registerForm" class="auth-form">
+  <input id="registerName" type="text" placeholder="Full name" required>
 
-    <form id="registerForm" class="auth-form">
-      <input id="registerName" type="text" placeholder="Full name" required>
-      <input id="registerEmail" type="email" placeholder="Email" required>
-      <input id="registerPassword" type="password" placeholder="Password" required>
+  <input id="registerEmail" type="email" placeholder="Email" required>
 
-      <select id="registerRole">
-        <option value="student">Student</option>
-      </select>
+  <input id="registerPassword" type="password" placeholder="Password" required>
 
-      <button class="btn primary-btn" type="submit">Create Account</button>
-    </form>
+  <select id="registerRole">
+    <option value="student">Student</option>
+  </select>
+
+  <button class="btn primary-btn" type="submit">
+    Create Account
+  </button>
+</form>
 
     <p id="authMessage" class="muted auth-message"></p>
   </div>
@@ -234,19 +237,7 @@
 
       <p id="resumeStatus" class="muted small"></p>
     </div>
-
-    <div class="dash-card reveal">
-      <h3>Visibility</h3>
-      <p class="muted">Control whether other users can see your profile.</p>
-
-      <label class="toggle-row">
-        <input id="visibilityToggle" type="checkbox">
-        <span>Profile visible</span>
-      </label>
-
-      <p class="muted small">Your resume is never shown to other users.</p>
-    </div>
-
+    
     <div class="dash-card reveal">
       <h3>Skill Tags</h3>
 
@@ -255,27 +246,38 @@
       </div>
     </div>
 
-    <div class="dash-card reveal">
-      <h3>Job Preferences</h3>
+ <div class="dash-card reveal">
+  <h3>Job Preferences</h3>
 
-      <select id="jobTypePref">
-        <option value="">Job Type</option>
-        <option value="internship">Internship</option>
-        <option value="part-time">Part-time</option>
-        <option value="full-time">Full-time</option>
-        <option value="remote">Remote</option>
-      </select>
+  <input id="careerInterestPref" type="text" placeholder="Career Interest">
 
-      <select id="locationPref">
-        <option value="">Location</option>
-        <option value="Kingston">Kingston</option>
-        <option value="St. Andrew">St. Andrew</option>
-        <option value="Montego Bay">Montego Bay</option>
-        <option value="Remote">Remote</option>
-      </select>
+  <select id="jobTypePref">
+    <option value="">Preferred Job Type</option>
+    <option value="Internship">Internship</option>
+    <option value="Part-time">Part-time</option>
+    <option value="Full-time">Full-time</option>
+    <option value="Freelance">Freelance</option>
+  </select>
 
-      <button id="savePrefsBtn" class="btn ghost-btn">Save Preferences</button>
-    </div>
+  <select id="workStylePref">
+    <option value="">Work Style</option>
+    <option value="Remote">Remote</option>
+    <option value="Hybrid">Hybrid</option>
+    <option value="On-site">On-site</option>
+  </select>
+
+  <select id="availabilityPref">
+    <option value="">Availability</option>
+    <option value="Weekends">Weekends</option>
+    <option value="Evenings">Evenings</option>
+    <option value="Summer">Summer</option>
+    <option value="Flexible">Flexible</option>
+  </select>
+
+  <input id="learningGoalsPref" type="text" placeholder="Learning Goals">
+
+  <button id="savePrefsBtn" class="btn ghost-btn">Save Preferences</button>
+</div>
 
     <div class="dash-card reveal">
       <h3>Search Jobs</h3>

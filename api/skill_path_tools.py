@@ -1,7 +1,10 @@
 # skill_path_tools.py
 
+import os
 import heapq
 import logging
+
+from dotenv import load_dotenv
 from mysql.connector.pooling import MySQLConnectionPool
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -11,6 +14,8 @@ from cosine_matcher import (
     get_latest_resume_text,
     get_job_text_by_id,
 )
+
+load_dotenv()
 
 log = logging.getLogger(__name__)
 
@@ -66,6 +71,96 @@ SKILL_ALIASES: dict[str, str] = {
     "ai imaging": "ai",
     "artificial intelligence": "ai",
 }
+
+# ---------------------------------------------------------------------------
+# Skill context expansion
+# Richer context per skill so TF-IDF gives a stronger signal
+# when a skill is added to the simulated resume.
+# ---------------------------------------------------------------------------
+
+SKILL_CONTEXT: dict[str, str] = {
+    # Office / admin
+    "excel":              "excel spreadsheet data analysis microsoft office formulas pivot tables",
+    "word":               "word document microsoft office writing reports formatting letters",
+    "microsoft office":   "microsoft office excel word powerpoint outlook productivity",
+    "administration":     "administration office management coordination operations support clerical",
+    "organization":       "organization planning coordination management workflow scheduling",
+    "database":           "database sql data management queries records storage retrieval",
+    "accounting":         "accounting finance bookkeeping ledger payroll invoicing",
+    "financial analysis": "financial analysis finance reporting budgeting forecasting",
+    "customer service":   "customer service support communication client relations helpdesk",
+    "project management": "project management planning coordination delivery agile scrum",
+    "public speaking":    "public speaking presentation communication leadership training",
+    "communication":      "communication writing presentation teamwork collaboration interpersonal",
+    "leadership":         "leadership management team coordination decision making strategy",
+    "teamwork":           "teamwork collaboration group work coordination support",
+    "problem solving":    "problem solving analytical thinking troubleshooting critical solutions",
+    "critical thinking":  "critical thinking analysis evaluation reasoning problem solving",
+    "time management":    "time management scheduling prioritization productivity efficiency",
+    "attention to detail": "attention to detail accuracy quality review verification",
+    # Tech
+    "python":             "python programming scripting automation development data backend",
+    "java":               "java programming backend spring enterprise development jvm",
+    "javascript":         "javascript frontend web development node react programming browser",
+    "typescript":         "typescript javascript frontend development static typing angular",
+    "react":              "react javascript frontend ui component web development spa",
+    "vue":                "vue javascript frontend ui component web development spa",
+    "angular":            "angular typescript frontend ui component web development spa",
+    "node":               "node javascript backend server api development runtime express",
+    "sql":                "sql database queries data management relational records joins",
+    "mysql":              "mysql sql database relational queries data management backend",
+    "postgresql":         "postgresql sql database relational queries data management backend",
+    "mongodb":            "mongodb nosql database document storage queries backend",
+    "docker":             "docker containerization deployment devops infrastructure backend",
+    "kubernetes":         "kubernetes container orchestration deployment devops infrastructure backend",
+    "aws":                "aws cloud computing infrastructure deployment services backend",
+    "azure":              "azure cloud computing microsoft infrastructure deployment backend",
+    "gcp":                "gcp google cloud computing infrastructure deployment backend",
+    "git":                "git version control source code management collaboration backend developer repository branching",
+    "linux":              "linux operating system server administration command line backend",
+    "machine learning":   "machine learning ai data science models training algorithms python",
+    "deep learning":      "deep learning neural networks ai computer vision nlp python",
+    "ai":                 "artificial intelligence machine learning data models automation python",
+    "nlp":                "nlp natural language processing text analysis machine learning python",
+    "data analysis":      "data analysis statistics visualization insights reporting excel",
+    "statistics":         "statistics data analysis probability modelling research python r",
+    "rest":               "rest api web services http integration backend endpoints json",
+    "rest api":           "rest api web services http integration backend endpoints json",
+    "api":                "api rest web services http integration backend endpoints developer",
+    "graphql":            "graphql api query language backend integration developer",
+    "flask":              "flask python web framework backend api development rest",
+    "django":             "django python web framework backend development rest",
+    "fastapi":            "fastapi python web framework backend api development rest",
+    "spring":             "spring java framework backend enterprise development rest api",
+    "spring boot":        "spring boot java framework backend microservices development rest",
+    "backend":            "backend server api development database rest java python node developer",
+    "frontend":           "frontend ui ux web development javascript react vue html css developer",
+    "full stack":         "full stack frontend backend developer javascript python api database web",
+    "microservices":      "microservices architecture backend distributed systems api docker kubernetes",
+    "terraform":          "terraform infrastructure as code devops cloud deployment aws",
+    "redis":              "redis cache in-memory database performance backend api",
+    "elasticsearch":      "elasticsearch search engine data indexing backend api",
+    "tableau":            "tableau data visualization business intelligence reporting dashboard",
+    "power bi":           "power bi data visualization business intelligence reporting dashboard",
+    "c++":                "c++ systems programming performance backend development low level",
+    "c#":                 "c# dotnet microsoft backend development enterprise api",
+    "swift":              "swift ios mobile apple development programming xcode",
+    "kotlin":             "kotlin android mobile development programming jvm backend",
+    "go":                 "go golang backend systems programming performance api",
+    "r":                  "r statistics data analysis programming research modelling",
+    "computer vision":    "computer vision image processing deep learning ai detection python",
+    "image processing":   "image processing computer vision python ai analysis detection",
+    "software engineering": "software engineering development backend frontend java python api",
+    "database design":    "database design sql schema modelling relational queries backend",
+    "data visualization": "data visualization charts graphs reporting tableau power bi excel",
+    "grpc":               "grpc api protocol backend microservices distributed systems",
+}
+
+
+def _expand_skill(skill: str) -> str:
+    """Return a rich context string for a skill to boost TF-IDF signal."""
+    return SKILL_CONTEXT.get(skill, f"{skill} project experience work professional developer")
+
 
 # ---------------------------------------------------------------------------
 # Hardcoded fallbacks
@@ -149,6 +244,15 @@ SOFTWARE_CONTEXT_TERMS: set[str] = {
     "api", "database", "spring", "react", "javascript",
     "microservices", "ai", "machine learning",
 }
+
+# ---------------------------------------------------------------------------
+# Blended score weights
+# 70% cosine similarity + 30% skill coverage
+# Skill coverage = what % of the job's required skills this skillset covers.
+# This gives meaningful per-step jumps even when TF-IDF signal is weak.
+# ---------------------------------------------------------------------------
+COSINE_WEIGHT = 0.70
+COVERAGE_WEIGHT = 0.30
 
 # ---------------------------------------------------------------------------
 # Dynamic loading from DB
@@ -247,12 +351,14 @@ PREREQUISITES: dict[str, set[str]] = {
     "mongodb": {"sql"},
 }
 
-BEAM_WIDTH = 8
-SKILL_LEARN_REPEAT = 4
-
-# Minimum cosine improvement required before a skill is accepted.
-# This prevents tiny improvements like 0.0002 from entering the path.
-MIN_IMPROVEMENT_THRESHOLD = 0.0
+# ---------------------------------------------------------------------------
+# Speed / quality controls
+# ---------------------------------------------------------------------------
+BEAM_WIDTH = 4
+SKILL_LEARN_REPEAT = 15
+MIN_IMPROVEMENT_THRESHOLD = 0.005
+MAX_SKILLS_TO_TEST = 15
+MAX_TARGET_GAIN = 0.30
 
 
 # ---------------------------------------------------------------------------
@@ -279,13 +385,8 @@ def is_software_context(job_text: str) -> bool:
 
 
 def filter_candidate_skills_for_context(candidate_skills: list[str], job_text: str) -> list[str]:
-    """
-    Removes clearly irrelevant skills for software/technical jobs.
-    Example: retail should not be recommended for Java backend roles.
-    """
     if not is_software_context(job_text):
         return candidate_skills
-
     return [
         skill for skill in candidate_skills
         if skill not in IRRELEVANT_SOFTWARE_SKILLS
@@ -293,10 +394,6 @@ def filter_candidate_skills_for_context(candidate_skills: list[str], job_text: s
 
 
 def get_skill_priority(skill: str, job_text: str = "") -> float:
-    """
-    Lower multiplier = preferred by Dijkstra.
-    Higher multiplier = less preferred.
-    """
     skill = normalise_skill(skill)
 
     if is_software_context(job_text) and skill in IRRELEVANT_SOFTWARE_SKILLS:
@@ -312,21 +409,19 @@ def get_skill_priority(skill: str, job_text: str = "") -> float:
 
 
 def compute_edge_weight(skill: str, improvement: float, job_text: str = "") -> float | None:
-    """
-    Lower cost = preferred by Dijkstra.
-
-    Combines:
-    - base learning difficulty
-    - cosine improvement
-    - skill priority/type
-    """
     if improvement < MIN_IMPROVEMENT_THRESHOLD:
         return None
 
     difficulty = SKILL_COST.get(skill, 2.5)
     priority = get_skill_priority(skill, job_text)
+    weight = (difficulty * priority) / (improvement + 1e-6)
 
-    return (difficulty * priority) / (improvement + 1e-6)
+    # Hard cap — anything above 200 means the skill barely helps this job.
+    # Prevents soft skills with tiny improvement from getting huge cost numbers.
+    if weight > 200:
+        return None
+
+    return weight
 
 
 # ---------------------------------------------------------------------------
@@ -376,14 +471,30 @@ def skills_already_in_resume(resume_text: str, candidate_skills: list[str]) -> s
 
 
 class _PathScorer:
-    def __init__(self, resume_text: str, job_text: str, candidate_skills: list[str]):
+    def __init__(
+        self,
+        resume_text: str,
+        job_text: str,
+        candidate_skills: list[str],
+        all_job_skills: list[str],
+        already_have: set[str],
+    ):
         self.resume_clean = clean_text(resume_text)
         self.job_clean = clean_text(job_text)
         self.skills = list(candidate_skills)
 
-        superset_doc = (self.resume_clean + " " + " ".join(self.skills)).strip()
+        # Total job skills used for coverage calculation.
+        # Includes skills the user already has so coverage reflects the full picture.
+        self.total_job_skills = len(all_job_skills) if all_job_skills else 1
+        self.already_have_count = len(already_have)
+
+        # Build superset doc using expanded skill context so the vectorizer
+        # vocabulary includes all relevant terms from the start.
+        expanded_skills = " ".join(_expand_skill(s) for s in candidate_skills)
+        superset_doc = (self.resume_clean + " " + expanded_skills).strip()
         corpus = [superset_doc, self.job_clean]
 
+        # Bigrams + higher max_features for richer matching signal.
         self.vectorizer = TfidfVectorizer(
             stop_words="english",
             ngram_range=(1, 2),
@@ -397,9 +508,11 @@ class _PathScorer:
         if not self.resume_clean or not self.job_clean:
             return 0.0
 
+        # --- Cosine similarity component ---
         if skillset:
             added = " ".join(
-                s for s in sorted(skillset)
+                _expand_skill(s)
+                for s in sorted(skillset)
                 for _ in range(SKILL_LEARN_REPEAT)
             )
             doc = (self.resume_clean + " " + added).strip()
@@ -407,7 +520,15 @@ class _PathScorer:
             doc = self.resume_clean
 
         vec = self.vectorizer.transform([doc])
-        return float(cosine_similarity(vec, self.job_vec)[0][0])
+        cosine = float(cosine_similarity(vec, self.job_vec)[0][0])
+
+        # --- Skill coverage component ---
+        # (skills already in resume + skills learned so far) / total job skills
+        skills_covered = self.already_have_count + len(skillset)
+        coverage = min(skills_covered / self.total_job_skills, 1.0)
+
+        # --- Blended score ---
+        return (COSINE_WEIGHT * cosine) + (COVERAGE_WEIGHT * coverage)
 
 
 def dijkstra_skill_path(
@@ -417,6 +538,15 @@ def dijkstra_skill_path(
     target_score: float = 0.30,
     beam_width: int = BEAM_WIDTH,
 ) -> dict:
+    """
+    Build a realistic learning roadmap by simulating each missing skill.
+
+    Scoring is a blend of:
+    - 70% cosine similarity between simulated resume and job description
+    - 30% skill coverage (how many job skills the user now has)
+
+    This gives meaningful per-step score jumps even when TF-IDF signal is weak.
+    """
     resume_text = resume_text or ""
     job_text = job_text or ""
 
@@ -427,38 +557,62 @@ def dijkstra_skill_path(
         return {
             "start_score": 0,
             "final_score": 0,
+            "target_score": 0,
+            "requested_target_score": round(target_score * 100),
             "path": [],
             "missing_skills": [],
+            "remaining_missing_skills": [],
             "already_have": [],
             "reached_target": False,
         }
 
     already_have = skills_already_in_resume(resume_text, candidate_skills)
-    skills_to_search = [s for s in candidate_skills if s not in already_have]
 
-    scorer = _PathScorer(resume_text, job_text, skills_to_search)
+    SOFT_SKILLS_EXCLUDE = {
+        "communication", "teamwork", "writing", "attention to detail",
+        "problem solving", "leadership", "time management", "critical thinking",
+        "adaptability", "professionalism", "organization", "public speaking",
+        "presentation", "research", "english", "word", "microsoft office",
+        "github",  # essentially same as git, too generic for roadmap
+    }
 
-    total_skills = len(candidate_skills)
+    skills_to_search = [
+        s for s in candidate_skills
+        if s not in already_have and s not in SOFT_SKILLS_EXCLUDE
+    ]
 
-    def skill_overlap_score(current_skillset: frozenset) -> float:
-        if total_skills == 0:
-            return 0.0
-        have = len(already_have) + len(current_skillset)
-        return have / total_skills
+    skills_to_search = sorted(
+        skills_to_search,
+        key=lambda s: (get_skill_priority(s, job_text), SKILL_COST.get(s, 2.5), s),
+    )[:MAX_SKILLS_TO_TEST]
 
-    start_score = skill_overlap_score(frozenset())
+    scorer = _PathScorer(
+        resume_text=resume_text,
+        job_text=job_text,
+        candidate_skills=skills_to_search,
+        all_job_skills=candidate_skills,
+        already_have=already_have,
+    )
 
-    if start_score >= target_score or not skills_to_search:
+    start_node = frozenset()
+    start_score = scorer.score(start_node)
+
+    requested_target_score = max(0.0, min(float(target_score), 1.0))
+    practical_target_score = min(requested_target_score, start_score + MAX_TARGET_GAIN, 1.0)
+
+    if start_score >= practical_target_score or not skills_to_search:
         return {
             "start_score": round(start_score * 100),
             "final_score": round(start_score * 100),
+            "target_score": round(practical_target_score * 100),
+            "requested_target_score": round(requested_target_score * 100),
             "path": [],
             "missing_skills": skills_to_search,
+            "remaining_missing_skills": skills_to_search,
             "already_have": sorted(already_have),
-            "reached_target": start_score >= target_score,
+            "reached_target": start_score >= practical_target_score,
         }
 
-    start_node = frozenset()
     dist: dict[frozenset, float] = {start_node: 0.0}
     prev: dict[frozenset, dict | None] = {start_node: None}
 
@@ -469,6 +623,10 @@ def dijkstra_skill_path(
     visited: set[frozenset] = set()
     best_goal_node: frozenset | None = None
 
+    # Track all first-level branches so we can reconstruct alternative paths
+    # Each entry: (skill, cost, final_score, full_path_steps)
+    all_first_branches: list[dict] = []
+
     while pq:
         current_cost, _, current_node = heapq.heappop(pq)
 
@@ -476,42 +634,45 @@ def dijkstra_skill_path(
             continue
 
         visited.add(current_node)
-        current_score = skill_overlap_score(current_node)
+        current_score = scorer.score(current_node)
 
-        if current_score >= target_score:
+        if current_score >= practical_target_score:
             best_goal_node = current_node
             break
 
         remaining = [s for s in skills_to_search if s not in current_node]
-
         candidates_scored = []
+
         for skill in remaining:
-            if not prerequisites_met(skill, current_node):
+            current_known_skills = frozenset(set(current_node) | already_have)
+            if not prerequisites_met(skill, current_known_skills):
                 continue
 
-            next_score = skill_overlap_score(current_node | {skill})
+            next_node = frozenset(set(current_node) | {skill})
+            next_score = scorer.score(next_node)
             improvement = next_score - current_score
 
-            if improvement >= MIN_IMPROVEMENT_THRESHOLD:
-                priority = get_skill_priority(skill, job_text)
-                candidates_scored.append((skill, improvement, next_score, priority))
+            edge_weight = compute_edge_weight(skill, improvement, job_text)
 
-        candidates_scored.sort(
-            key=lambda x: (
-                compute_edge_weight(x[0], x[1], job_text),
-                -x[1],
-            )
-        )
+            if edge_weight is not None:
+                candidates_scored.append((skill, improvement, next_score, edge_weight))
+
+        candidates_scored.sort(key=lambda x: (x[3], -x[1], x[0]))
+
+        # Track all candidates at the root level as alternative paths
+        if current_node == start_node:
+            for skill, improvement, score_after, edge_weight in candidates_scored:
+                all_first_branches.append({
+                    "first_skill": skill,
+                    "cost": round(edge_weight, 2),
+                    "score_after": round(score_after * 100),
+                    "improvement": round(improvement * 100),
+                })
 
         candidates = candidates_scored[:beam_width]
 
-        for skill, improvement, score_after, _priority in candidates:
+        for skill, improvement, score_after, edge_weight in candidates:
             next_node = frozenset(set(current_node) | {skill})
-
-            edge_weight = compute_edge_weight(skill, improvement, job_text)
-            if edge_weight is None:
-                continue
-
             new_cost = current_cost + edge_weight
 
             if next_node not in dist or new_cost < dist[next_node]:
@@ -525,13 +686,14 @@ def dijkstra_skill_path(
                     "step_cost": edge_weight,
                     "total_cost": new_cost,
                 }
+
                 counter += 1
                 heapq.heappush(pq, (new_cost, counter, next_node))
 
     if best_goal_node is None and dist:
         best_goal_node = max(
             dist.keys(),
-            key=lambda n: (skill_overlap_score(n), -dist[n]),
+            key=lambda n: (scorer.score(n), -dist[n]),
         )
         log.warning("Target score not reached. Returning best partial path.")
 
@@ -539,8 +701,11 @@ def dijkstra_skill_path(
         return {
             "start_score": round(start_score * 100),
             "final_score": round(start_score * 100),
+            "target_score": round(practical_target_score * 100),
+            "requested_target_score": round(requested_target_score * 100),
             "path": [],
             "missing_skills": skills_to_search,
+            "remaining_missing_skills": skills_to_search,
             "already_have": sorted(already_have),
             "reached_target": False,
         }
@@ -550,6 +715,7 @@ def dijkstra_skill_path(
 
     while prev.get(node) is not None:
         step = prev[node]
+
         path.append({
             "learn": step["skill_learned"],
             "score": round(step["score_after"] * 100),
@@ -557,21 +723,50 @@ def dijkstra_skill_path(
             "step_cost": round(step["step_cost"], 2),
             "total_cost": round(step["total_cost"], 2),
         })
+
         node = step["previous_node"]
 
     path.reverse()
 
-    final_score = round(skill_overlap_score(best_goal_node) * 100)
+    final_score_float = scorer.score(best_goal_node)
+    final_score = round(final_score_float * 100)
     learned_skills = set(best_goal_node)
-    missing_skills = [s for s in skills_to_search if s not in learned_skills]
+    chosen_first_skill = path[0]["learn"] if path else None
+
+    remaining_missing_skills = [
+        s for s in skills_to_search
+        if s not in learned_skills
+    ]
+
+    # Build alternative paths — all first-level branches except the chosen one
+    alternative_paths = []
+    for branch in all_first_branches:
+        if branch["first_skill"] != chosen_first_skill:
+            alternative_paths.append({
+                "first_skill": branch["first_skill"],
+                "cost": branch["cost"],
+                "score_after": branch["score_after"],
+                "improvement": branch["improvement"],
+                "reason_rejected": "Higher learning cost than chosen path" if branch["cost"] > (path[0]["step_cost"] if path else 999) else "Lower score improvement than chosen path",
+            })
+
+    # Cap at 3 alternatives to keep UI clean
+    alternative_paths = alternative_paths[:3]
 
     return {
         "start_score": round(start_score * 100),
         "final_score": final_score,
+        "target_score": round(practical_target_score * 100),
+        "requested_target_score": round(requested_target_score * 100),
         "path": path,
-        "missing_skills": missing_skills,
+        "missing_skills": skills_to_search,
+        "remaining_missing_skills": remaining_missing_skills,
         "already_have": sorted(already_have),
-        "reached_target": final_score >= round(target_score * 100),
+        "reached_target": final_score_float >= practical_target_score,
+        # Dijkstra exploration stats for frontend display
+        "paths_explored": len(visited),
+        "alternative_paths": alternative_paths,
+        "chosen_path_cost": round(dist.get(best_goal_node, 0), 2),
     }
 
 
@@ -616,4 +811,5 @@ if __name__ == "__main__":
         job_id=job_id,
         target_score=0.30,
     )
+
     print(result)
