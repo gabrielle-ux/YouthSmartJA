@@ -3,7 +3,6 @@
 import os
 import heapq
 import logging
-import math
 
 from dotenv import load_dotenv
 from mysql.connector.pooling import MySQLConnectionPool
@@ -71,12 +70,6 @@ SKILL_ALIASES: dict[str, str] = {
     "office": "microsoft office",
     "ai imaging": "ai",
     "artificial intelligence": "ai",
-    "ci/cd": "ci cd",
-    "cicd": "ci cd",
-    "continuous integration": "ci cd",
-    "continuous deployment": "ci cd",
-    "english language": "english",
-    "ms word": "word",
 }
 
 # ---------------------------------------------------------------------------
@@ -188,99 +181,28 @@ _FALLBACK_KNOWN_SKILLS: set[str] = {
 }
 
 _FALLBACK_SKILL_COST: dict[str, float] = {
-    # -----------------------------------------------------------------
-    # Tier 1 — Beginner (1–2 weeks to pick up basics)
-    # -----------------------------------------------------------------
-    "communication": 1.0,
-    "teamwork": 1.0,
-    "time management": 1.0,
-    "attention to detail": 1.0,
-    "microsoft office": 1.2,
-    "excel": 1.5,          # basic use is easy; advanced takes longer
-    "html": 1.5,
-    "css": 1.5,
-    "git": 1.8,            # essential but learnable in days
-    "customer service": 1.5,
+    "communication": 1.0, "teamwork": 1.0, "time management": 1.0,
+    "excel": 1.2, "microsoft office": 1.2,
+    "git": 1.5, "html": 1.5, "css": 1.5, "customer service": 1.5,
+    "rest": 1.5, "rest api": 1.5, "api": 1.5,
     "public speaking": 1.8,
-
-    # -----------------------------------------------------------------
-    # Tier 2 — Intermediate (1–4 weeks, needs practice)
-    # -----------------------------------------------------------------
-    "rest": 2.0,
-    "rest api": 2.0,
-    "api": 2.0,
-    "sql": 2.2,
-    "linux": 2.5,
-    "problem solving": 2.0,
-    "critical thinking": 2.0,
-    "leadership": 2.0,
-    "project management": 2.5,
-    "database": 2.5,
-    "database design": 2.8,
-    "data analysis": 2.5,
-    "data visualization": 2.5,
-    "tableau": 2.5,
-    "power bi": 2.5,
-
-    # -----------------------------------------------------------------
-    # Tier 3 — Solid effort (1–3 months)
-    # -----------------------------------------------------------------
-    "javascript": 3.0,
-    "typescript": 3.5,     # harder than JS — needs JS first
-    "python": 3.0,
-    "mysql": 2.8,
-    "postgresql": 3.0,
-    "mongodb": 3.0,
-    "redis": 3.2,
-    "backend": 3.0,
-    "frontend": 3.0,
-    "flask": 3.2,          # needs Python first
-    "fastapi": 3.3,
-    "node": 3.5,           # needs JS first
-    "vue": 3.5,            # needs JS first
-    "react": 4.0,          # needs JS + ecosystem understanding
-    "angular": 4.5,        # needs TypeScript + steep learning curve
-    "django": 3.8,         # needs Python + more conventions than Flask
-    "java": 4.0,           # verbose, stricter than Python
-    "go": 4.0,
-    "ruby": 3.5,
-    "c#": 4.0,
-    "docker": 3.8,
-    "graphql": 3.5,        # needs REST understanding first
-    "elasticsearch": 3.8,
-    "statistics": 3.5,
-    "accounting": 3.5,
-    "financial analysis": 3.8,
-    "full stack": 4.0,     # combines frontend + backend
-    "microservices": 4.0,
-    "software engineering": 3.5,
-
-    # -----------------------------------------------------------------
-    # Tier 4 — Advanced (3–6 months, real projects needed)
-    # -----------------------------------------------------------------
-    "spring": 4.5,         # needs Java + enterprise patterns
-    "spring boot": 4.8,
-    "kotlin": 4.5,
-    "swift": 5.0,
-    "c++": 5.5,            # memory management, complex syntax
-    "r": 4.0,
-    "aws": 5.0,            # huge surface area
-    "azure": 5.0,
-    "gcp": 5.0,
-    "terraform": 5.0,      # needs cloud knowledge first
-    "kubernetes": 5.5,     # needs Docker + distributed systems understanding
-    "grpc": 4.5,
-
-    # -----------------------------------------------------------------
-    # Tier 5 — Expert (6+ months, math/research heavy)
-    # -----------------------------------------------------------------
-    "ai": 6.0,
-    "machine learning": 7.0,   # needs stats + python + math
-    "nlp": 7.5,                # needs ML + linguistics understanding
-    "data analysis": 2.5,      # basic is easy; already in tier 2
-    "image processing": 7.0,
-    "computer vision": 8.0,    # needs deep learning + math
-    "deep learning": 9.0,      # hardest — needs ML + linear algebra + GPU
+    "leadership": 2.0, "problem solving": 2.0, "critical thinking": 2.0,
+    "attention to detail": 2.0, "project management": 2.0,
+    "sql": 2.0, "mysql": 2.0, "linux": 2.0,
+    "javascript": 2.5, "typescript": 2.5, "tableau": 2.5, "power bi": 2.5,
+    "data visualization": 2.5, "data analysis": 2.5,
+    "graphql": 2.5, "flask": 2.5, "vue": 2.5,
+    "mongodb": 2.5, "redis": 2.5,
+    "backend": 2.5, "frontend": 2.5, "database": 2.5, "database design": 2.5,
+    "python": 3.0, "java": 3.0, "go": 3.0, "statistics": 3.0, "postgresql": 3.0,
+    "react": 3.0, "angular": 3.0, "node": 3.0, "django": 3.0, "fastapi": 2.8,
+    "spring": 3.0, "spring boot": 3.2, "microservices": 3.2,
+    "r": 3.0, "elasticsearch": 3.0, "c#": 3.5, "ruby": 3.0, "swift": 3.5,
+    "kotlin": 3.5, "docker": 3.5,
+    "aws": 4.0, "azure": 4.0, "gcp": 4.0, "terraform": 4.0, "c++": 4.0,
+    "financial analysis": 3.5, "accounting": 3.5, "kubernetes": 4.5,
+    "ai": 4.5, "machine learning": 5.0, "nlp": 5.0,
+    "computer vision": 5.5, "image processing": 5.0, "deep learning": 6.0,
 }
 
 # ---------------------------------------------------------------------------
@@ -301,8 +223,6 @@ TECHNICAL_SKILLS: set[str] = {
     "ai", "machine learning", "deep learning",
     "computer vision", "image processing",
     "data analysis", "statistics",
-    "ci cd", "devops", "jenkins", "github actions",
-    "terraform", "redis", "grpc",
 }
 
 SOFT_SKILLS: set[str] = {
@@ -434,147 +354,11 @@ PREREQUISITES: dict[str, set[str]] = {
 # ---------------------------------------------------------------------------
 # Speed / quality controls
 # ---------------------------------------------------------------------------
-BEAM_WIDTH = 4                     # paths explored per step
-SKILL_LEARN_REPEAT = 15            # default fallback repeat count
-MIN_IMPROVEMENT_THRESHOLD = 0.005  # at least +0.5% before a skill becomes a roadmap step
-MAX_SKILLS_TO_TEST = 15            # max missing skills to run Dijkstra over
-MAX_TARGET_GAIN = 0.30             # roadmap target is at most +30% above current score
-
-# Skills that should not appear as learning-roadmap steps.
-# They may still be shown elsewhere, but Guidance Mode should focus on skills
-# that produce clear career/technical growth.
-GENERIC_ROADMAP_EXCLUDE: set[str] = {
-    "english", "writing", "word", "microsoft office",
-    "communication", "teamwork", "attention to detail",
-    "problem solving", "leadership", "time management", "critical thinking",
-    "adaptability", "professionalism", "organization", "public speaking",
-    "presentation", "research",
-}
-
-SOFTWARE_ROADMAP_EXCLUDE: set[str] = {
-    "excel", "administration", "customer service", "accounting",
-    "financial analysis", "office", "clerical",
-}
-
-# ---------------------------------------------------------------------------
-# Per-skill repeat counts — controls how much each skill boosts the score.
-# Higher = bigger improvement signal for that skill = more differentiated values.
-# Core tech skills get high values, soft/easy skills get low values.
-# ---------------------------------------------------------------------------
-SKILL_IMPORTANCE: dict[str, int] = {
-    # --- Core languages (biggest signal) ---
-    "python":           30,
-    "javascript":       30,
-    "java":             28,
-    "typescript":       28,
-    "c++":              25,
-    "c#":               25,
-    "go":               25,
-    "kotlin":           22,
-    "swift":            22,
-    "ruby":             20,
-    "r":                18,
-
-    # --- Frontend frameworks ---
-    "react":            28,
-    "angular":          26,
-    "vue":              24,
-    "node":             26,
-    "html":             12,
-    "css":              12,
-
-    # --- Backend frameworks ---
-    "flask":            26,
-    "django":           26,
-    "fastapi":          24,
-    "spring":           26,
-    "spring boot":      26,
-
-    # --- APIs ---
-    "rest api":         22,
-    "rest":             20,
-    "api":              18,
-    "graphql":          22,
-    "grpc":             20,
-
-    # --- Databases ---
-    "sql":              22,
-    "mysql":            20,
-    "postgresql":       20,
-    "mongodb":          20,
-    "redis":            18,
-    "elasticsearch":    18,
-    "database":         16,
-    "database design":  18,
-
-    # --- DevOps / Cloud ---
-    "aws":              26,
-    "azure":            26,
-    "gcp":              24,
-    "docker":           24,
-    "kubernetes":       26,
-    "terraform":        22,
-    "linux":            18,
-    "git":              12,
-    "ci cd":            20,
-    "devops":           22,
-    "jenkins":          18,
-    "github actions":   16,
-    "ansible":          18,
-
-    # --- AI / Data ---
-    "machine learning": 28,
-    "deep learning":    28,
-    "ai":               24,
-    "nlp":              26,
-    "computer vision":  26,
-    "image processing": 22,
-    "data analysis":    20,
-    "statistics":       20,
-    "pandas":           18,
-    "numpy":            16,
-    "scikit learn":     22,
-    "tensorflow":       26,
-    "pytorch":          26,
-    "spark":            22,
-    "airflow":          20,
-    "bigquery":         18,
-    "snowflake":        18,
-    "dbt":              16,
-    "etl":              18,
-    "data pipeline":    20,
-    "data engineering": 22,
-    "llm":              24,
-    "generative ai":    22,
-    "prompt engineering": 16,
-
-    # --- Security / IAM ---
-    "cybersecurity":    24,
-    "iam":              22,
-    "active directory": 18,
-    "okta":             16,
-    "sso":              14,
-    "saml":             16,
-    "oauth":            18,
-    "zero trust":       20,
-    "siem":             20,
-    "penetration testing": 24,
-
-    # --- General / soft (low signal — shouldn't dominate roadmap) ---
-    "excel":            10,
-    "tableau":          12,
-    "power bi":         12,
-    "data visualization": 12,
-    "microsoft office": 8,
-    "communication":    6,
-    "teamwork":         6,
-    "leadership":       8,
-    "problem solving":  8,
-    "project management": 10,
-    "customer service": 6,
-    "accounting":       10,
-    "financial analysis": 12,
-}
+BEAM_WIDTH = 4
+SKILL_LEARN_REPEAT = 15
+MIN_IMPROVEMENT_THRESHOLD = 0.005
+MAX_SKILLS_TO_TEST = 15
+MAX_TARGET_GAIN = 0.30
 
 
 # ---------------------------------------------------------------------------
@@ -609,25 +393,6 @@ def filter_candidate_skills_for_context(candidate_skills: list[str], job_text: s
     ]
 
 
-def should_consider_roadmap_skill(skill: str, job_text: str) -> bool:
-    """Return True only for skills worth showing as roadmap steps."""
-    skill = normalise_skill(skill)
-
-    if skill in GENERIC_ROADMAP_EXCLUDE:
-        return False
-
-    if is_software_context(job_text) and skill in SOFTWARE_ROADMAP_EXCLUDE:
-        return False
-
-    if is_software_context(job_text) and skill in SOFT_SKILLS:
-        return False
-
-    if skill in IRRELEVANT_SOFTWARE_SKILLS:
-        return False
-
-    return True
-
-
 def get_skill_priority(skill: str, job_text: str = "") -> float:
     skill = normalise_skill(skill)
 
@@ -644,13 +409,19 @@ def get_skill_priority(skill: str, job_text: str = "") -> float:
 
 
 def compute_edge_weight(skill: str, improvement: float, job_text: str = "") -> float | None:
-    if improvement <= 0 or improvement < MIN_IMPROVEMENT_THRESHOLD:
+    if improvement < MIN_IMPROVEMENT_THRESHOLD:
         return None
 
     difficulty = SKILL_COST.get(skill, 2.5)
     priority = get_skill_priority(skill, job_text)
+    weight = (difficulty * priority) / (improvement + 1e-6)
 
-    return (difficulty * priority) / (improvement + 1e-6)
+    # Hard cap — anything above 200 means the skill barely helps this job.
+    # Prevents soft skills with tiny improvement from getting huge cost numbers.
+    if weight > 200:
+        return None
+
+    return weight
 
 
 # ---------------------------------------------------------------------------
@@ -742,7 +513,7 @@ class _PathScorer:
             added = " ".join(
                 _expand_skill(s)
                 for s in sorted(skillset)
-                for _ in range(SKILL_IMPORTANCE.get(s, SKILL_LEARN_REPEAT))
+                for _ in range(SKILL_LEARN_REPEAT)
             )
             doc = (self.resume_clean + " " + added).strip()
         else:
@@ -797,9 +568,17 @@ def dijkstra_skill_path(
 
     already_have = skills_already_in_resume(resume_text, candidate_skills)
 
+    SOFT_SKILLS_EXCLUDE = {
+        "communication", "teamwork", "writing", "attention to detail",
+        "problem solving", "leadership", "time management", "critical thinking",
+        "adaptability", "professionalism", "organization", "public speaking",
+        "presentation", "research", "english", "word", "microsoft office",
+        "github",  # essentially same as git, too generic for roadmap
+    }
+
     skills_to_search = [
         s for s in candidate_skills
-        if s not in already_have and should_consider_roadmap_skill(s, job_text)
+        if s not in already_have and s not in SOFT_SKILLS_EXCLUDE
     ]
 
     skills_to_search = sorted(
@@ -819,9 +598,7 @@ def dijkstra_skill_path(
     start_score = scorer.score(start_node)
 
     requested_target_score = max(0.0, min(float(target_score), 1.0))
-    # Do not chase an unrealistic 85%/100% target when the current match is low.
-    # Example: if start is 18% and requested target is 100%, use 48%.
-    practical_target_score = max(0.0, min(requested_target_score, start_score + MAX_TARGET_GAIN, 1.0))
+    practical_target_score = min(requested_target_score, start_score + MAX_TARGET_GAIN, 1.0)
 
     if start_score >= practical_target_score or not skills_to_search:
         return {
@@ -845,6 +622,10 @@ def dijkstra_skill_path(
 
     visited: set[frozenset] = set()
     best_goal_node: frozenset | None = None
+
+    # Track all first-level branches so we can reconstruct alternative paths
+    # Each entry: (skill, cost, final_score, full_path_steps)
+    all_first_branches: list[dict] = []
 
     while pq:
         current_cost, _, current_node = heapq.heappop(pq)
@@ -877,6 +658,17 @@ def dijkstra_skill_path(
                 candidates_scored.append((skill, improvement, next_score, edge_weight))
 
         candidates_scored.sort(key=lambda x: (x[3], -x[1], x[0]))
+
+        # Track all candidates at the root level as alternative paths
+        if current_node == start_node:
+            for skill, improvement, score_after, edge_weight in candidates_scored:
+                all_first_branches.append({
+                    "first_skill": skill,
+                    "cost": round(edge_weight, 2),
+                    "score_after": round(score_after * 100),
+                    "improvement": round(improvement * 100),
+                })
+
         candidates = candidates_scored[:beam_width]
 
         for skill, improvement, score_after, edge_weight in candidates:
@@ -924,13 +716,10 @@ def dijkstra_skill_path(
     while prev.get(node) is not None:
         step = prev[node]
 
-        displayed_improvement = max(1, math.ceil(step["improvement"] * 100))
-
         path.append({
             "learn": step["skill_learned"],
             "score": round(step["score_after"] * 100),
-            "improvement": displayed_improvement,
-            "raw_improvement": round(step["improvement"] * 100, 2),
+            "improvement": round(step["improvement"] * 100),
             "step_cost": round(step["step_cost"], 2),
             "total_cost": round(step["total_cost"], 2),
         })
@@ -942,11 +731,27 @@ def dijkstra_skill_path(
     final_score_float = scorer.score(best_goal_node)
     final_score = round(final_score_float * 100)
     learned_skills = set(best_goal_node)
+    chosen_first_skill = path[0]["learn"] if path else None
 
     remaining_missing_skills = [
         s for s in skills_to_search
         if s not in learned_skills
     ]
+
+    # Build alternative paths — all first-level branches except the chosen one
+    alternative_paths = []
+    for branch in all_first_branches:
+        if branch["first_skill"] != chosen_first_skill:
+            alternative_paths.append({
+                "first_skill": branch["first_skill"],
+                "cost": branch["cost"],
+                "score_after": branch["score_after"],
+                "improvement": branch["improvement"],
+                "reason_rejected": "Higher learning cost than chosen path" if branch["cost"] > (path[0]["step_cost"] if path else 999) else "Lower score improvement than chosen path",
+            })
+
+    # Cap at 3 alternatives to keep UI clean
+    alternative_paths = alternative_paths[:3]
 
     return {
         "start_score": round(start_score * 100),
@@ -958,6 +763,10 @@ def dijkstra_skill_path(
         "remaining_missing_skills": remaining_missing_skills,
         "already_have": sorted(already_have),
         "reached_target": final_score_float >= practical_target_score,
+        # Dijkstra exploration stats for frontend display
+        "paths_explored": len(visited),
+        "alternative_paths": alternative_paths,
+        "chosen_path_cost": round(dist.get(best_goal_node, 0), 2),
     }
 
 

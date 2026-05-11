@@ -915,6 +915,38 @@ function updateCareerReadiness(score){
 // ===============================
 // GUIDANCE MODE
 // ===============================
+// ===============================
+// GUIDANCE HELPERS
+// ===============================
+function costToTime(skillCost) {
+  if (skillCost <= 1.8)  return "~1–2 weeks";
+  if (skillCost <= 2.5)  return "~3–4 weeks";
+  if (skillCost <= 3.5)  return "~1–2 months";
+  if (skillCost <= 4.5)  return "~2–3 months";
+  if (skillCost <= 5.5)  return "~3–6 months";
+  if (skillCost <= 7.0)  return "~6–9 months";
+  return "~9–12 months";
+}
+
+const SOFT_SKILLS_FRONTEND = new Set([
+  "communication", "teamwork", "attention to detail", "problem solving",
+  "leadership", "time management", "critical thinking", "adaptability",
+  "professionalism", "organization", "public speaking", "presentation",
+  "research", "writing", "github", "word", "microsoft office",
+]);
+
+function filterSoftSkills(steps) {
+  return steps.filter(step => !SOFT_SKILLS_FRONTEND.has((step.learn || "").toLowerCase()));
+}
+
+function filterSoftSkillTags(skills) {
+  return skills.filter(s => !SOFT_SKILLS_FRONTEND.has((s || "").toLowerCase()));
+}
+
+
+// ===============================
+// GUIDANCE MODE
+// ===============================
 async function runGuidance(jobId){
   const panel = document.getElementById("guidancePanel");
 
@@ -936,8 +968,15 @@ async function runGuidance(jobId){
       return;
     }
 
-    const path = data.path || [];
-    const missingSkills = data.missing_skills || [];
+    const rawPath          = data.path || [];
+    const rawMissing       = data.missing_skills || [];
+    const alternativePaths = (data.alternative_paths || []).filter(a => !SOFT_SKILLS_FRONTEND.has((a.first_skill||"").toLowerCase()));
+    const pathsExplored    = data.paths_explored || 0;
+    const chosenCost       = data.chosen_path_cost || 0;
+
+    // Filter soft skills out of both lists
+    const path         = filterSoftSkills(rawPath);
+    const missingSkills = filterSoftSkillTags(rawMissing);
 
     panel.innerHTML = `
       <h3>${escapeHTML(data.job?.title || "Career Roadmap")}</h3>
@@ -945,11 +984,25 @@ async function runGuidance(jobId){
       <div class="score-row">
         <span class="score-pill">Start ${Math.round(data.start_score || 0)}%</span>
         <span class="score-pill">Final ${Math.round(data.final_score || 0)}%</span>
-        <span class="score-pill">${data.reached_target ? "Target Reached" : "Keep Improving"}</span>
+        <span class="score-pill">${data.reached_target ? "✓ Target Reached" : "Keep Improving"}</span>
       </div>
 
-      <h3 class="sub">Missing Skills</h3>
+      ${pathsExplored > 0 ? `
+      <div style="
+        margin: 1rem 0;
+        padding: 0.75rem 1rem;
+        background: rgba(13,122,95,0.08);
+        border-left: 3px solid #2dc4b3;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        color: var(--text-muted, #8899a6);
+      ">
+        🔍 Dijkstra explored <strong style="color:#2dc4b3">${pathsExplored} skill combinations</strong>
+        and selected the most efficient learning path
+      </div>
+      ` : ""}
 
+      <h3 class="sub">Missing Skills</h3>
       <div class="tag-list">
         ${
           missingSkills.length
@@ -958,21 +1011,23 @@ async function runGuidance(jobId){
         }
       </div>
 
-      <h3 class="sub">Learning Roadmap</h3>
+      <h3 class="sub" style="margin-top:1.5rem">✅ Chosen Learning Path</h3>
+      <p style="font-size:0.8rem;color:var(--text-muted,#8899a6);margin:-0.4rem 0 0.8rem">
+        Optimal route selected from ${pathsExplored} explored combinations
+      </p>
 
       <div class="pref-list">
         ${
           path.length
-          ? path.map(step => `
-            <div class="pref">
+          ? path.map((step, i) => `
+            <div class="pref" style="border-left: 2px solid #2dc4b3; padding-left: 0.75rem;">
               <span class="dot dot-1"></span>
               <div>
-                <p>Learn ${escapeHTML(step.learn)}</p>
+                <p><strong>Step ${i + 1}:</strong> Learn ${escapeHTML(step.learn)}</p>
                 <small>
-                  Improvement:
-                  ${Math.round(step.improvement || 0)}%
-                 · Score:
-                  ${Math.round(step.score || 0)}%
+                  +${Math.round(step.improvement || 0)}% match improvement
+                  &nbsp;·&nbsp; Score after: ${Math.round(step.score || 0)}%
+                  &nbsp;·&nbsp; ⏱ ${costToTime(step.step_cost || 0)}
                 </small>
               </div>
             </div>
@@ -981,7 +1036,32 @@ async function runGuidance(jobId){
         }
       </div>
 
-      <button class="btn primary-btn" onclick="loadCourses(${jobId})">
+      ${alternativePaths.length ? `
+        <h3 class="sub" style="margin-top:1.5rem">❌ Paths Not Chosen</h3>
+        <p style="font-size:0.8rem;color:var(--text-muted,#8899a6);margin:-0.4rem 0 0.8rem">
+          These routes were explored but were less efficient
+        </p>
+        <div class="pref-list">
+          ${alternativePaths.map(alt => `
+            <div class="pref" style="border-left:2px solid #e74c3c;padding-left:0.75rem;opacity:0.7;">
+              <span class="dot" style="background:#e74c3c;width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:0.5rem;flex-shrink:0"></span>
+              <div>
+                <p style="text-decoration:line-through;color:var(--text-muted,#8899a6)">
+                  Start with: ${escapeHTML(alt.first_skill)}
+                </p>
+                <small>
+                  ⏱ ${costToTime(alt.cost || 0)}
+                  &nbsp;·&nbsp; Score after: ${alt.score_after || 0}%
+                  &nbsp;·&nbsp; +${alt.improvement || 0}% improvement
+                  &nbsp;·&nbsp; ${escapeHTML(alt.reason_rejected || "Not optimal")}
+                </small>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+
+      <button class="btn primary-btn" style="margin-top:1.5rem" onclick="loadCourses(${jobId})">
         Find Courses
       </button>
     `;
