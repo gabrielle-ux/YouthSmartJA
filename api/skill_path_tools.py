@@ -3,6 +3,7 @@
 import os
 import heapq
 import logging
+import math
 
 from dotenv import load_dotenv
 from mysql.connector.pooling import MySQLConnectionPool
@@ -70,7 +71,103 @@ SKILL_ALIASES: dict[str, str] = {
     "office": "microsoft office",
     "ai imaging": "ai",
     "artificial intelligence": "ai",
+    "ci/cd": "ci cd",
+    "cicd": "ci cd",
+    "continuous integration": "ci cd",
+    "continuous deployment": "ci cd",
+    "english language": "english",
+    "ms word": "word",
 }
+
+# ---------------------------------------------------------------------------
+# Skill context expansion
+# Richer context per skill so TF-IDF gives a stronger signal
+# when a skill is added to the simulated resume.
+# ---------------------------------------------------------------------------
+
+SKILL_CONTEXT: dict[str, str] = {
+    # Office / admin
+    "excel":              "excel spreadsheet data analysis microsoft office formulas pivot tables",
+    "word":               "word document microsoft office writing reports formatting letters",
+    "microsoft office":   "microsoft office excel word powerpoint outlook productivity",
+    "administration":     "administration office management coordination operations support clerical",
+    "organization":       "organization planning coordination management workflow scheduling",
+    "database":           "database sql data management queries records storage retrieval",
+    "accounting":         "accounting finance bookkeeping ledger payroll invoicing",
+    "financial analysis": "financial analysis finance reporting budgeting forecasting",
+    "customer service":   "customer service support communication client relations helpdesk",
+    "project management": "project management planning coordination delivery agile scrum",
+    "public speaking":    "public speaking presentation communication leadership training",
+    "communication":      "communication writing presentation teamwork collaboration interpersonal",
+    "leadership":         "leadership management team coordination decision making strategy",
+    "teamwork":           "teamwork collaboration group work coordination support",
+    "problem solving":    "problem solving analytical thinking troubleshooting critical solutions",
+    "critical thinking":  "critical thinking analysis evaluation reasoning problem solving",
+    "time management":    "time management scheduling prioritization productivity efficiency",
+    "attention to detail": "attention to detail accuracy quality review verification",
+    # Tech
+    "python":             "python programming scripting automation development data backend",
+    "java":               "java programming backend spring enterprise development jvm",
+    "javascript":         "javascript frontend web development node react programming browser",
+    "typescript":         "typescript javascript frontend development static typing angular",
+    "react":              "react javascript frontend ui component web development spa",
+    "vue":                "vue javascript frontend ui component web development spa",
+    "angular":            "angular typescript frontend ui component web development spa",
+    "node":               "node javascript backend server api development runtime express",
+    "sql":                "sql database queries data management relational records joins",
+    "mysql":              "mysql sql database relational queries data management backend",
+    "postgresql":         "postgresql sql database relational queries data management backend",
+    "mongodb":            "mongodb nosql database document storage queries backend",
+    "docker":             "docker containerization deployment devops infrastructure backend",
+    "kubernetes":         "kubernetes container orchestration deployment devops infrastructure backend",
+    "aws":                "aws cloud computing infrastructure deployment services backend",
+    "azure":              "azure cloud computing microsoft infrastructure deployment backend",
+    "gcp":                "gcp google cloud computing infrastructure deployment backend",
+    "git":                "git version control source code management collaboration backend developer repository branching",
+    "linux":              "linux operating system server administration command line backend",
+    "machine learning":   "machine learning ai data science models training algorithms python",
+    "deep learning":      "deep learning neural networks ai computer vision nlp python",
+    "ai":                 "artificial intelligence machine learning data models automation python",
+    "nlp":                "nlp natural language processing text analysis machine learning python",
+    "data analysis":      "data analysis statistics visualization insights reporting excel",
+    "statistics":         "statistics data analysis probability modelling research python r",
+    "rest":               "rest api web services http integration backend endpoints json",
+    "rest api":           "rest api web services http integration backend endpoints json",
+    "api":                "api rest web services http integration backend endpoints developer",
+    "graphql":            "graphql api query language backend integration developer",
+    "flask":              "flask python web framework backend api development rest",
+    "django":             "django python web framework backend development rest",
+    "fastapi":            "fastapi python web framework backend api development rest",
+    "spring":             "spring java framework backend enterprise development rest api",
+    "spring boot":        "spring boot java framework backend microservices development rest",
+    "backend":            "backend server api development database rest java python node developer",
+    "frontend":           "frontend ui ux web development javascript react vue html css developer",
+    "full stack":         "full stack frontend backend developer javascript python api database web",
+    "microservices":      "microservices architecture backend distributed systems api docker kubernetes",
+    "terraform":          "terraform infrastructure as code devops cloud deployment aws",
+    "redis":              "redis cache in-memory database performance backend api",
+    "elasticsearch":      "elasticsearch search engine data indexing backend api",
+    "tableau":            "tableau data visualization business intelligence reporting dashboard",
+    "power bi":           "power bi data visualization business intelligence reporting dashboard",
+    "c++":                "c++ systems programming performance backend development low level",
+    "c#":                 "c# dotnet microsoft backend development enterprise api",
+    "swift":              "swift ios mobile apple development programming xcode",
+    "kotlin":             "kotlin android mobile development programming jvm backend",
+    "go":                 "go golang backend systems programming performance api",
+    "r":                  "r statistics data analysis programming research modelling",
+    "computer vision":    "computer vision image processing deep learning ai detection python",
+    "image processing":   "image processing computer vision python ai analysis detection",
+    "software engineering": "software engineering development backend frontend java python api",
+    "database design":    "database design sql schema modelling relational queries backend",
+    "data visualization": "data visualization charts graphs reporting tableau power bi excel",
+    "grpc":               "grpc api protocol backend microservices distributed systems",
+}
+
+
+def _expand_skill(skill: str) -> str:
+    """Return a rich context string for a skill to boost TF-IDF signal."""
+    return SKILL_CONTEXT.get(skill, f"{skill} project experience work professional developer")
+
 
 # ---------------------------------------------------------------------------
 # Hardcoded fallbacks
@@ -91,28 +188,99 @@ _FALLBACK_KNOWN_SKILLS: set[str] = {
 }
 
 _FALLBACK_SKILL_COST: dict[str, float] = {
-    "communication": 1.0, "teamwork": 1.0, "time management": 1.0,
-    "excel": 1.2, "microsoft office": 1.2,
-    "git": 1.5, "html": 1.5, "css": 1.5, "customer service": 1.5,
-    "rest": 1.5, "rest api": 1.5, "api": 1.5,
+    # -----------------------------------------------------------------
+    # Tier 1 — Beginner (1–2 weeks to pick up basics)
+    # -----------------------------------------------------------------
+    "communication": 1.0,
+    "teamwork": 1.0,
+    "time management": 1.0,
+    "attention to detail": 1.0,
+    "microsoft office": 1.2,
+    "excel": 1.5,          # basic use is easy; advanced takes longer
+    "html": 1.5,
+    "css": 1.5,
+    "git": 1.8,            # essential but learnable in days
+    "customer service": 1.5,
     "public speaking": 1.8,
-    "leadership": 2.0, "problem solving": 2.0, "critical thinking": 2.0,
-    "attention to detail": 2.0, "project management": 2.0,
-    "sql": 2.0, "mysql": 2.0, "linux": 2.0,
-    "javascript": 2.5, "typescript": 2.5, "tableau": 2.5, "power bi": 2.5,
-    "data visualization": 2.5, "data analysis": 2.5,
-    "graphql": 2.5, "flask": 2.5, "vue": 2.5,
-    "mongodb": 2.5, "redis": 2.5,
-    "backend": 2.5, "frontend": 2.5, "database": 2.5, "database design": 2.5,
-    "python": 3.0, "java": 3.0, "go": 3.0, "statistics": 3.0, "postgresql": 3.0,
-    "react": 3.0, "angular": 3.0, "node": 3.0, "django": 3.0, "fastapi": 2.8,
-    "spring": 3.0, "spring boot": 3.2, "microservices": 3.2,
-    "r": 3.0, "elasticsearch": 3.0, "c#": 3.5, "ruby": 3.0, "swift": 3.5,
-    "kotlin": 3.5, "docker": 3.5,
-    "aws": 4.0, "azure": 4.0, "gcp": 4.0, "terraform": 4.0, "c++": 4.0,
-    "financial analysis": 3.5, "accounting": 3.5, "kubernetes": 4.5,
-    "ai": 4.5, "machine learning": 5.0, "nlp": 5.0,
-    "computer vision": 5.5, "image processing": 5.0, "deep learning": 6.0,
+
+    # -----------------------------------------------------------------
+    # Tier 2 — Intermediate (1–4 weeks, needs practice)
+    # -----------------------------------------------------------------
+    "rest": 2.0,
+    "rest api": 2.0,
+    "api": 2.0,
+    "sql": 2.2,
+    "linux": 2.5,
+    "problem solving": 2.0,
+    "critical thinking": 2.0,
+    "leadership": 2.0,
+    "project management": 2.5,
+    "database": 2.5,
+    "database design": 2.8,
+    "data analysis": 2.5,
+    "data visualization": 2.5,
+    "tableau": 2.5,
+    "power bi": 2.5,
+
+    # -----------------------------------------------------------------
+    # Tier 3 — Solid effort (1–3 months)
+    # -----------------------------------------------------------------
+    "javascript": 3.0,
+    "typescript": 3.5,     # harder than JS — needs JS first
+    "python": 3.0,
+    "mysql": 2.8,
+    "postgresql": 3.0,
+    "mongodb": 3.0,
+    "redis": 3.2,
+    "backend": 3.0,
+    "frontend": 3.0,
+    "flask": 3.2,          # needs Python first
+    "fastapi": 3.3,
+    "node": 3.5,           # needs JS first
+    "vue": 3.5,            # needs JS first
+    "react": 4.0,          # needs JS + ecosystem understanding
+    "angular": 4.5,        # needs TypeScript + steep learning curve
+    "django": 3.8,         # needs Python + more conventions than Flask
+    "java": 4.0,           # verbose, stricter than Python
+    "go": 4.0,
+    "ruby": 3.5,
+    "c#": 4.0,
+    "docker": 3.8,
+    "graphql": 3.5,        # needs REST understanding first
+    "elasticsearch": 3.8,
+    "statistics": 3.5,
+    "accounting": 3.5,
+    "financial analysis": 3.8,
+    "full stack": 4.0,     # combines frontend + backend
+    "microservices": 4.0,
+    "software engineering": 3.5,
+
+    # -----------------------------------------------------------------
+    # Tier 4 — Advanced (3–6 months, real projects needed)
+    # -----------------------------------------------------------------
+    "spring": 4.5,         # needs Java + enterprise patterns
+    "spring boot": 4.8,
+    "kotlin": 4.5,
+    "swift": 5.0,
+    "c++": 5.5,            # memory management, complex syntax
+    "r": 4.0,
+    "aws": 5.0,            # huge surface area
+    "azure": 5.0,
+    "gcp": 5.0,
+    "terraform": 5.0,      # needs cloud knowledge first
+    "kubernetes": 5.5,     # needs Docker + distributed systems understanding
+    "grpc": 4.5,
+
+    # -----------------------------------------------------------------
+    # Tier 5 — Expert (6+ months, math/research heavy)
+    # -----------------------------------------------------------------
+    "ai": 6.0,
+    "machine learning": 7.0,   # needs stats + python + math
+    "nlp": 7.5,                # needs ML + linguistics understanding
+    "data analysis": 2.5,      # basic is easy; already in tier 2
+    "image processing": 7.0,
+    "computer vision": 8.0,    # needs deep learning + math
+    "deep learning": 9.0,      # hardest — needs ML + linear algebra + GPU
 }
 
 # ---------------------------------------------------------------------------
@@ -133,6 +301,8 @@ TECHNICAL_SKILLS: set[str] = {
     "ai", "machine learning", "deep learning",
     "computer vision", "image processing",
     "data analysis", "statistics",
+    "ci cd", "devops", "jenkins", "github actions",
+    "terraform", "redis", "grpc",
 }
 
 SOFT_SKILLS: set[str] = {
@@ -154,6 +324,15 @@ SOFTWARE_CONTEXT_TERMS: set[str] = {
     "api", "database", "spring", "react", "javascript",
     "microservices", "ai", "machine learning",
 }
+
+# ---------------------------------------------------------------------------
+# Blended score weights
+# 70% cosine similarity + 30% skill coverage
+# Skill coverage = what % of the job's required skills this skillset covers.
+# This gives meaningful per-step jumps even when TF-IDF signal is weak.
+# ---------------------------------------------------------------------------
+COSINE_WEIGHT = 0.70
+COVERAGE_WEIGHT = 0.30
 
 # ---------------------------------------------------------------------------
 # Dynamic loading from DB
@@ -252,14 +431,150 @@ PREREQUISITES: dict[str, set[str]] = {
     "mongodb": {"sql"},
 }
 
-#  speed improvement: lower beam width.
-BEAM_WIDTH = 4
+# ---------------------------------------------------------------------------
+# Speed / quality controls
+# ---------------------------------------------------------------------------
+BEAM_WIDTH = 4                     # paths explored per step
+SKILL_LEARN_REPEAT = 15            # default fallback repeat count
+MIN_IMPROVEMENT_THRESHOLD = 0.005  # at least +0.5% before a skill becomes a roadmap step
+MAX_SKILLS_TO_TEST = 15            # max missing skills to run Dijkstra over
+MAX_TARGET_GAIN = 0.30             # roadmap target is at most +30% above current score
 
-BEAM_WIDTH = 4
-SKILL_LEARN_REPEAT = 4
+# Skills that should not appear as learning-roadmap steps.
+# They may still be shown elsewhere, but Guidance Mode should focus on skills
+# that produce clear career/technical growth.
+GENERIC_ROADMAP_EXCLUDE: set[str] = {
+    "english", "writing", "word", "microsoft office",
+    "communication", "teamwork", "attention to detail",
+    "problem solving", "leadership", "time management", "critical thinking",
+    "adaptability", "professionalism", "organization", "public speaking",
+    "presentation", "research",
+}
 
-#  ignore tiny useless skill improvements.
-MIN_IMPROVEMENT_THRESHOLD = 0.01
+SOFTWARE_ROADMAP_EXCLUDE: set[str] = {
+    "excel", "administration", "customer service", "accounting",
+    "financial analysis", "office", "clerical",
+}
+
+# ---------------------------------------------------------------------------
+# Per-skill repeat counts — controls how much each skill boosts the score.
+# Higher = bigger improvement signal for that skill = more differentiated values.
+# Core tech skills get high values, soft/easy skills get low values.
+# ---------------------------------------------------------------------------
+SKILL_IMPORTANCE: dict[str, int] = {
+    # --- Core languages (biggest signal) ---
+    "python":           30,
+    "javascript":       30,
+    "java":             28,
+    "typescript":       28,
+    "c++":              25,
+    "c#":               25,
+    "go":               25,
+    "kotlin":           22,
+    "swift":            22,
+    "ruby":             20,
+    "r":                18,
+
+    # --- Frontend frameworks ---
+    "react":            28,
+    "angular":          26,
+    "vue":              24,
+    "node":             26,
+    "html":             12,
+    "css":              12,
+
+    # --- Backend frameworks ---
+    "flask":            26,
+    "django":           26,
+    "fastapi":          24,
+    "spring":           26,
+    "spring boot":      26,
+
+    # --- APIs ---
+    "rest api":         22,
+    "rest":             20,
+    "api":              18,
+    "graphql":          22,
+    "grpc":             20,
+
+    # --- Databases ---
+    "sql":              22,
+    "mysql":            20,
+    "postgresql":       20,
+    "mongodb":          20,
+    "redis":            18,
+    "elasticsearch":    18,
+    "database":         16,
+    "database design":  18,
+
+    # --- DevOps / Cloud ---
+    "aws":              26,
+    "azure":            26,
+    "gcp":              24,
+    "docker":           24,
+    "kubernetes":       26,
+    "terraform":        22,
+    "linux":            18,
+    "git":              12,
+    "ci cd":            20,
+    "devops":           22,
+    "jenkins":          18,
+    "github actions":   16,
+    "ansible":          18,
+
+    # --- AI / Data ---
+    "machine learning": 28,
+    "deep learning":    28,
+    "ai":               24,
+    "nlp":              26,
+    "computer vision":  26,
+    "image processing": 22,
+    "data analysis":    20,
+    "statistics":       20,
+    "pandas":           18,
+    "numpy":            16,
+    "scikit learn":     22,
+    "tensorflow":       26,
+    "pytorch":          26,
+    "spark":            22,
+    "airflow":          20,
+    "bigquery":         18,
+    "snowflake":        18,
+    "dbt":              16,
+    "etl":              18,
+    "data pipeline":    20,
+    "data engineering": 22,
+    "llm":              24,
+    "generative ai":    22,
+    "prompt engineering": 16,
+
+    # --- Security / IAM ---
+    "cybersecurity":    24,
+    "iam":              22,
+    "active directory": 18,
+    "okta":             16,
+    "sso":              14,
+    "saml":             16,
+    "oauth":            18,
+    "zero trust":       20,
+    "siem":             20,
+    "penetration testing": 24,
+
+    # --- General / soft (low signal — shouldn't dominate roadmap) ---
+    "excel":            10,
+    "tableau":          12,
+    "power bi":         12,
+    "data visualization": 12,
+    "microsoft office": 8,
+    "communication":    6,
+    "teamwork":         6,
+    "leadership":       8,
+    "problem solving":  8,
+    "project management": 10,
+    "customer service": 6,
+    "accounting":       10,
+    "financial analysis": 12,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -288,11 +603,29 @@ def is_software_context(job_text: str) -> bool:
 def filter_candidate_skills_for_context(candidate_skills: list[str], job_text: str) -> list[str]:
     if not is_software_context(job_text):
         return candidate_skills
-
     return [
         skill for skill in candidate_skills
         if skill not in IRRELEVANT_SOFTWARE_SKILLS
     ]
+
+
+def should_consider_roadmap_skill(skill: str, job_text: str) -> bool:
+    """Return True only for skills worth showing as roadmap steps."""
+    skill = normalise_skill(skill)
+
+    if skill in GENERIC_ROADMAP_EXCLUDE:
+        return False
+
+    if is_software_context(job_text) and skill in SOFTWARE_ROADMAP_EXCLUDE:
+        return False
+
+    if is_software_context(job_text) and skill in SOFT_SKILLS:
+        return False
+
+    if skill in IRRELEVANT_SOFTWARE_SKILLS:
+        return False
+
+    return True
 
 
 def get_skill_priority(skill: str, job_text: str = "") -> float:
@@ -311,7 +644,7 @@ def get_skill_priority(skill: str, job_text: str = "") -> float:
 
 
 def compute_edge_weight(skill: str, improvement: float, job_text: str = "") -> float | None:
-    if improvement < MIN_IMPROVEMENT_THRESHOLD:
+    if improvement <= 0 or improvement < MIN_IMPROVEMENT_THRESHOLD:
         return None
 
     difficulty = SKILL_COST.get(skill, 2.5)
@@ -367,20 +700,34 @@ def skills_already_in_resume(resume_text: str, candidate_skills: list[str]) -> s
 
 
 class _PathScorer:
-    def __init__(self, resume_text: str, job_text: str, candidate_skills: list[str]):
+    def __init__(
+        self,
+        resume_text: str,
+        job_text: str,
+        candidate_skills: list[str],
+        all_job_skills: list[str],
+        already_have: set[str],
+    ):
         self.resume_clean = clean_text(resume_text)
         self.job_clean = clean_text(job_text)
         self.skills = list(candidate_skills)
 
-        superset_doc = (self.resume_clean + " " + " ".join(self.skills)).strip()
+        # Total job skills used for coverage calculation.
+        # Includes skills the user already has so coverage reflects the full picture.
+        self.total_job_skills = len(all_job_skills) if all_job_skills else 1
+        self.already_have_count = len(already_have)
+
+        # Build superset doc using expanded skill context so the vectorizer
+        # vocabulary includes all relevant terms from the start.
+        expanded_skills = " ".join(_expand_skill(s) for s in candidate_skills)
+        superset_doc = (self.resume_clean + " " + expanded_skills).strip()
         corpus = [superset_doc, self.job_clean]
 
-        # Teammate's speed improvement:
-        # unigram only + fewer max features.
+        # Bigrams + higher max_features for richer matching signal.
         self.vectorizer = TfidfVectorizer(
             stop_words="english",
-            ngram_range=(1, 1),
-            max_features=1000,
+            ngram_range=(1, 2),
+            max_features=3000,
         )
 
         self.vectorizer.fit(corpus)
@@ -390,17 +737,27 @@ class _PathScorer:
         if not self.resume_clean or not self.job_clean:
             return 0.0
 
+        # --- Cosine similarity component ---
         if skillset:
             added = " ".join(
-                s for s in sorted(skillset)
-                for _ in range(SKILL_LEARN_REPEAT)
+                _expand_skill(s)
+                for s in sorted(skillset)
+                for _ in range(SKILL_IMPORTANCE.get(s, SKILL_LEARN_REPEAT))
             )
             doc = (self.resume_clean + " " + added).strip()
         else:
             doc = self.resume_clean
 
         vec = self.vectorizer.transform([doc])
-        return float(cosine_similarity(vec, self.job_vec)[0][0])
+        cosine = float(cosine_similarity(vec, self.job_vec)[0][0])
+
+        # --- Skill coverage component ---
+        # (skills already in resume + skills learned so far) / total job skills
+        skills_covered = self.already_have_count + len(skillset)
+        coverage = min(skills_covered / self.total_job_skills, 1.0)
+
+        # --- Blended score ---
+        return (COSINE_WEIGHT * cosine) + (COVERAGE_WEIGHT * coverage)
 
 
 def dijkstra_skill_path(
@@ -410,6 +767,15 @@ def dijkstra_skill_path(
     target_score: float = 0.30,
     beam_width: int = BEAM_WIDTH,
 ) -> dict:
+    """
+    Build a realistic learning roadmap by simulating each missing skill.
+
+    Scoring is a blend of:
+    - 70% cosine similarity between simulated resume and job description
+    - 30% skill coverage (how many job skills the user now has)
+
+    This gives meaningful per-step score jumps even when TF-IDF signal is weak.
+    """
     resume_text = resume_text or ""
     job_text = job_text or ""
 
@@ -420,6 +786,8 @@ def dijkstra_skill_path(
         return {
             "start_score": 0,
             "final_score": 0,
+            "target_score": 0,
+            "requested_target_score": round(target_score * 100),
             "path": [],
             "missing_skills": [],
             "remaining_missing_skills": [],
@@ -428,31 +796,46 @@ def dijkstra_skill_path(
         }
 
     already_have = skills_already_in_resume(resume_text, candidate_skills)
-    skills_to_search = [s for s in candidate_skills if s not in already_have]
 
-    total_skills = len(candidate_skills)
+    skills_to_search = [
+        s for s in candidate_skills
+        if s not in already_have and should_consider_roadmap_skill(s, job_text)
+    ]
 
-    def skill_overlap_score(current_skillset: frozenset) -> float:
-        if total_skills == 0:
-            return 0.0
+    skills_to_search = sorted(
+        skills_to_search,
+        key=lambda s: (get_skill_priority(s, job_text), SKILL_COST.get(s, 2.5), s),
+    )[:MAX_SKILLS_TO_TEST]
 
-        have = len(already_have) + len(current_skillset)
-        return have / total_skills
+    scorer = _PathScorer(
+        resume_text=resume_text,
+        job_text=job_text,
+        candidate_skills=skills_to_search,
+        all_job_skills=candidate_skills,
+        already_have=already_have,
+    )
 
-    start_score = skill_overlap_score(frozenset())
+    start_node = frozenset()
+    start_score = scorer.score(start_node)
 
-    if start_score >= target_score or not skills_to_search:
+    requested_target_score = max(0.0, min(float(target_score), 1.0))
+    # Do not chase an unrealistic 85%/100% target when the current match is low.
+    # Example: if start is 18% and requested target is 100%, use 48%.
+    practical_target_score = max(0.0, min(requested_target_score, start_score + MAX_TARGET_GAIN, 1.0))
+
+    if start_score >= practical_target_score or not skills_to_search:
         return {
             "start_score": round(start_score * 100),
             "final_score": round(start_score * 100),
+            "target_score": round(practical_target_score * 100),
+            "requested_target_score": round(requested_target_score * 100),
             "path": [],
             "missing_skills": skills_to_search,
             "remaining_missing_skills": skills_to_search,
             "already_have": sorted(already_have),
-            "reached_target": start_score >= target_score,
+            "reached_target": start_score >= practical_target_score,
         }
 
-    start_node = frozenset()
     dist: dict[frozenset, float] = {start_node: 0.0}
     prev: dict[frozenset, dict | None] = {start_node: None}
 
@@ -470,21 +853,22 @@ def dijkstra_skill_path(
             continue
 
         visited.add(current_node)
-        current_score = skill_overlap_score(current_node)
+        current_score = scorer.score(current_node)
 
-        if current_score >= target_score:
+        if current_score >= practical_target_score:
             best_goal_node = current_node
             break
 
         remaining = [s for s in skills_to_search if s not in current_node]
-
         candidates_scored = []
 
         for skill in remaining:
-            if not prerequisites_met(skill, current_node):
+            current_known_skills = frozenset(set(current_node) | already_have)
+            if not prerequisites_met(skill, current_known_skills):
                 continue
 
-            next_score = skill_overlap_score(current_node | {skill})
+            next_node = frozenset(set(current_node) | {skill})
+            next_score = scorer.score(next_node)
             improvement = next_score - current_score
 
             edge_weight = compute_edge_weight(skill, improvement, job_text)
@@ -492,7 +876,7 @@ def dijkstra_skill_path(
             if edge_weight is not None:
                 candidates_scored.append((skill, improvement, next_score, edge_weight))
 
-        candidates_scored.sort(key=lambda x: (x[3], -x[1]))
+        candidates_scored.sort(key=lambda x: (x[3], -x[1], x[0]))
         candidates = candidates_scored[:beam_width]
 
         for skill, improvement, score_after, edge_weight in candidates:
@@ -517,7 +901,7 @@ def dijkstra_skill_path(
     if best_goal_node is None and dist:
         best_goal_node = max(
             dist.keys(),
-            key=lambda n: (skill_overlap_score(n), -dist[n]),
+            key=lambda n: (scorer.score(n), -dist[n]),
         )
         log.warning("Target score not reached. Returning best partial path.")
 
@@ -525,6 +909,8 @@ def dijkstra_skill_path(
         return {
             "start_score": round(start_score * 100),
             "final_score": round(start_score * 100),
+            "target_score": round(practical_target_score * 100),
+            "requested_target_score": round(requested_target_score * 100),
             "path": [],
             "missing_skills": skills_to_search,
             "remaining_missing_skills": skills_to_search,
@@ -538,10 +924,13 @@ def dijkstra_skill_path(
     while prev.get(node) is not None:
         step = prev[node]
 
+        displayed_improvement = max(1, math.ceil(step["improvement"] * 100))
+
         path.append({
             "learn": step["skill_learned"],
             "score": round(step["score_after"] * 100),
-            "improvement": round(step["improvement"] * 100),
+            "improvement": displayed_improvement,
+            "raw_improvement": round(step["improvement"] * 100, 2),
             "step_cost": round(step["step_cost"], 2),
             "total_cost": round(step["total_cost"], 2),
         })
@@ -550,7 +939,8 @@ def dijkstra_skill_path(
 
     path.reverse()
 
-    final_score = round(skill_overlap_score(best_goal_node) * 100)
+    final_score_float = scorer.score(best_goal_node)
+    final_score = round(final_score_float * 100)
     learned_skills = set(best_goal_node)
 
     remaining_missing_skills = [
@@ -561,16 +951,13 @@ def dijkstra_skill_path(
     return {
         "start_score": round(start_score * 100),
         "final_score": final_score,
+        "target_score": round(practical_target_score * 100),
+        "requested_target_score": round(requested_target_score * 100),
         "path": path,
-
-        # Original missing skills before the roadmap starts.
         "missing_skills": skills_to_search,
-
-        # Skills still missing after the generated roadmap.
         "remaining_missing_skills": remaining_missing_skills,
-
         "already_have": sorted(already_have),
-        "reached_target": final_score >= round(target_score * 100),
+        "reached_target": final_score_float >= practical_target_score,
     }
 
 

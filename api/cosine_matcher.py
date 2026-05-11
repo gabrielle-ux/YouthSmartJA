@@ -130,13 +130,15 @@ def get_job_text(job: dict) -> str:
     """
     Build job text for matching.
 
-    We repeat the title to slightly boost
-    role importance in the vector space.
+    FIX: triple the title weight and cap description at 800 chars.
+    Long descriptions dilute resume signal — a 5000-char job post vs a 500-char
+    resume means the resume terms get tiny TF-IDF weights. Capping description
+    and boosting the title brings scores into a more meaningful range.
     """
     title = job.get("title", "") or ""
-    description = job.get("description", "") or ""
+    description = (job.get("description", "") or "")[:800]
 
-    return f"{title} {title} {description}"
+    return f"{title} {title} {title} {description}"
 
 
 def get_job_text_by_id(job_id: int) -> str:
@@ -159,6 +161,7 @@ def get_job_text_by_id(job_id: int) -> str:
         if not row:
             return ""
 
+        # FIX: use same capped get_job_text logic for consistency with cosine_match_jobs
         return get_job_text(row)
 
     finally:
@@ -296,6 +299,12 @@ def cosine_match_jobs(user_id: int, limit: int = 10):
 
     resume_vector = tfidf_matrix[0:1]
     job_vectors = tfidf_matrix[1:]
+
+    # FIX: boost resume vector weight — resumes are short vs long job descriptions,
+    # so their TF-IDF vectors get low magnitudes. Multiplying by 2.5 compensates
+    # and brings match scores into a more meaningful range.
+    import numpy as np
+    resume_vector = resume_vector.multiply(2.5)
 
     # -----------------------------
     # Cosine Similarity

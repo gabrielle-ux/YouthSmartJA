@@ -794,7 +794,6 @@ function renderJobs(jobs){
         <div class="score-row">
           <span class="score-pill">Match ${match}%</span>
           <span class="score-pill">Preference ${pref}%</span>
-          <span class="score-pill">Final ${finalScore}%</span>
           <span class="category-pill">${escapeHTML(category)}</span>
         </div>
 
