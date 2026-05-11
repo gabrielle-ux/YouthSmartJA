@@ -57,6 +57,30 @@ function hideDashboard(){
   }
 }
 
+function showFlash(message, type = "success") {
+    const flash = document.createElement("div");
+    flash.textContent = message;
+    flash.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 8px;
+        background: ${type === "success" ? "#2dc4b3" : "#e74c3c"};
+        color: #0f1a1f;
+        font-weight: 600;
+        font-size: 0.9rem;
+        z-index: 9999;
+        box-shadow: 0 8px 32px -8px rgba(0,0,0,.4);
+        transition: opacity 0.5s ease;
+    `;
+    document.body.appendChild(flash);
+    setTimeout(() => {
+        flash.style.opacity = "0";
+        setTimeout(() => flash.remove(), 500);
+    }, 3000);
+}
+
 function getJobId(job){
   return job.id || job.job_id;
 }
@@ -571,7 +595,7 @@ if(savePrefsBtn){
     localStorage.setItem("ys_pref_job_type", jobType);
     localStorage.setItem("ys_pref_location", location);
 
-    alert("Preferences saved.");
+    showFlash("Preferences saved successfully!");
     loadMatches();
   });
 }
