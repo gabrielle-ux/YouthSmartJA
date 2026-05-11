@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>About — YouthSmartJA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"/>
+</head>
+<body>
+
+<nav class="navbar">
+  <span class="brand">YouthSmartJA</span>
+  <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/features">Features</a>
+    <a href="/about">How It Works</a>
+    <a href="/register">Login/Register</a>
+    <a href="/dashboard">Dashboard</a>
+  </div>
+</nav>
+
+<section id="how" class="slide gradient-hero">
+  <h2>How YouthSmartJA Works</h2>
+  <div class="grid grid-2 align-start">
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-head">
+          <span class="step-num">01</span>
+          <h3>Create Profile</h3>
+        </div>
+        <p>Students sign up, select preferences, and prepare their profile.</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-head">
+          <span class="step-num">02</span>
+          <h3>Upload Resume</h3>
+        </div>
+        <p>Resume processing extracts skill tags and prepares text for matching.</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-head">
+          <span class="step-num">03</span>
+          <h3>Generate Scores</h3>
+        </div>
+        <p>Each job gets a match score, preference score, and final recommendation score.</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-head">
+          <span class="step-num">04</span>
+          <h3>Run Guidance Mode</h3>
+        </div>
+        <p>The roadmap shows missing skills that can improve the student’s job match.</p>
+      </div>
+    </div>
+
+    <div class="diagram reveal">
+      <div class="diagram-node">📄 Resume Upload</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node">🧠 NLP Resume Processing</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node">🎯 Cosine Similarity Matching</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node">🧩 Skill Gap Detection</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node">🛣️ Dijkstra Learning Roadmap</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node accent">📊 Career Dashboard</div>
+    </div>
+  </div>
+</section>
+
+<script src="{{ url_for('static', filename='script.js') }}" defer></script>
+</body>
+</html>

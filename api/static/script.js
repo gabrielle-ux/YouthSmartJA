@@ -86,10 +86,19 @@ if(navToggle && navLinks){
 }
 
 document.querySelectorAll(".nav-links a").forEach(link => {
-  link.addEventListener("click", () => {
-    if(navLinks){
-      navLinks.classList.remove("open");
+  link.addEventListener("click", (e) => {
+    const href = link.getAttribute("href");
+
+    // ONLY prevent default if it's a same-page scroll (starts with #)
+    // If it starts with / (like /features), let the browser change pages!
+    if (href.startsWith("#")) {
+      e.preventDefault(); 
+      const target = document.querySelector(href);
+      if (target) target.scrollIntoView({ behavior: "smooth" });
     }
+    
+    // Close mobile menu if it's open
+    if (navLinks) navLinks.classList.remove("open");
   });
 });
 
@@ -112,41 +121,31 @@ function revealOnScroll(){
 }
 
 window.addEventListener("scroll", revealOnScroll);
-window.addEventListener("load", revealOnScroll);
+window.addEventListener("DOMContentLoaded", revealOnScroll);
 
 
 // ===============================
 // ACTIVE NAVIGATION LINK
 // ===============================
-const sections = document.querySelectorAll("section[id]");
-const navItems = document.querySelectorAll(".nav-links a");
 
-function activateNavLink(){
-  let currentSection = "";
-
-  sections.forEach(section => {
-    const sectionTop = section.offsetTop - 200;
-    const sectionHeight = section.offsetHeight;
-
-    if(
-      window.scrollY >= sectionTop &&
-      window.scrollY < sectionTop + sectionHeight
-    ){
-      currentSection = section.getAttribute("id");
-    }
-  });
+function activateNavLink() {
+  const currentPath = window.location.pathname; // Gets the current URL path
+  const navItems = document.querySelectorAll(".nav-links a");
 
   navItems.forEach(link => {
     link.classList.remove("active");
-
-    if(link.getAttribute("href") === `#${currentSection}`){
+    
+    // Check if the link's href matches the current URL path
+    const linkPath = link.getAttribute("href");
+    
+    if (currentPath === linkPath || (currentPath === "/" && linkPath === "/")) {
       link.classList.add("active");
     }
   });
 }
 
-window.addEventListener("scroll", activateNavLink);
-
+// Run on load
+window.addEventListener("load", activateNavLink);
 
 // ===============================
 // PARALLAX BLOBS
@@ -376,7 +375,10 @@ if(loginForm){
       }
 
       showMessage("Login successful.");
-      showDashboard();
+      
+      setTimeout(() => {
+          window.location.href = "/dashboard"; 
+      }, 1000);
 
       await loadSavedResume();
       await loadMatches();
@@ -397,15 +399,13 @@ const logoutBtn = document.getElementById("logoutBtn");
 
 if(logoutBtn){
   logoutBtn.addEventListener("click", () => {
+    // 1. Clear the local data
     localStorage.removeItem("ys_token");
     localStorage.removeItem("ys_user_name");
 
-    hideDashboard();
-
-    window.scrollTo({
-      top:0,
-      behavior:"smooth"
-    });
+    // 2. Redirect to the home page (index.html)
+    // This effectively "hides" the dashboard because they are leaving the page
+    window.location.href = "/";
   });
 }
 
@@ -1221,23 +1221,39 @@ async function removeBookmark(jobId){
 
 
 // ===============================
-// RESTORE LOGIN STATE
+// DASHBOARD & AUTH STATE CONTROL
 // ===============================
 window.addEventListener("DOMContentLoaded", async () => {
-  const token = getToken();
-  const userName = localStorage.getItem("ys_user_name");
+    const dashboard = document.getElementById("dashboard");
+    const token = getToken();
+    const storedName = localStorage.getItem("ys_user_name");
 
-  if(token){
-    const nameBox = document.getElementById("currentUserName");
+    // 1. Handle Dashboard Page Logic
+    if (dashboard) {
+        // Security Check: If no token, kick them out to register/login
+        if (!token) {
+            window.location.href = "/register";
+            return; 
+        }
 
-    if(nameBox && userName){
-      nameBox.textContent = userName;
+        // If we have a token, show the dashboard
+        dashboard.classList.remove("hidden");
+
+        // Set the User Name
+        const nameBox = document.getElementById("currentUserName");
+        if (nameBox && storedName) {
+            nameBox.textContent = storedName;
+        }
+
+        // Load the data
+        await loadSavedResume();
+        await loadMatches();
+        await loadBookmarks();
     }
 
-    showDashboard();
-
-    await loadSavedResume();
-    await loadMatches();
-    await loadBookmarks();
-  }
+    // 2. Handle Navbar Updates (Optional: useful for index.html too)
+    // If you want to show/hide certain links based on login state
+    if (token) {
+        console.log("User is logged in as:", storedName);
+    }
 });

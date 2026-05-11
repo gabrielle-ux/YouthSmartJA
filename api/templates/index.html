@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>YouthSmartJA — AI Career Guidance Dashboard</title>
+  <meta name="description" content="AI-powered career guidance platform for Jamaican youth."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- link rel="stylesheet" href="static/styles.css"/ -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"/>
+
+</head>
+
+<body>
+
+<nav class="navbar">
+  <span class="brand">YouthSmartJA</span>
+
+  <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/features">Features</a>
+    <a href="/about">How It Works</a>
+    <a href="/register">Login/Register</a>
+    <a href="/dashboard">Dashboard</a>
+  </div>
+</nav>
+
+<section id="home" class="hero gradient-hero">
+  <div class="hero-bg"></div>
+
+  <div class="hero-inner reveal">
+    <span class="chip">AI Career Guidance for Jamaican Youth</span>
+
+    <h1>
+      Build Your Career With
+      <span class="text-gradient">YouthSmartJA</span>
+    </h1>
+
+    <p class="lede">
+      Upload your resume, get matched with real jobs, discover missing skills,
+      and follow a personalized roadmap toward better opportunities.
+    </p>
+
+    <div class="hero-actions">
+      <a href="#auth" class="btn primary-btn">Get Started</a>
+      <a href="#features" class="btn ghost-btn">Explore Features</a>
+    </div>
+  </div>
+
+  <div class="dashboard-preview reveal">
+    <div class="preview-card">
+      <span>Match Score</span>
+      <h3 class="text-gradient">84%</h3>
+      <p>Software Intern</p>
+    </div>
+
+    <div class="preview-card">
+      <span>Missing Skills</span>
+      <p>Python APIs · SQL · Machine Learning</p>
+    </div>
+
+    <div class="preview-card">
+      <span>Roadmap</span>
+      <p>Learn backend → improve resume → unlock stronger matches</p>
+    </div>
+  </div>
+
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+</section>
+
+
+<footer>
+  <p class="text-gradient brand-lg">YouthSmartJA</p>
+  <p class="muted">AI Career Guidance Platform for Jamaican Youth</p>
+</footer>
+
+<!-- <script src="static/script.js"></script> -->
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+
+</body>
+</html>
