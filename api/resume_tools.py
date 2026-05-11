@@ -9,8 +9,8 @@ from text_cleaning import clean_text, EXTRA_NOISE_WORDS, TECH_NORMALIZATION
 
 DB_CONFIG = {
     "host": "127.0.0.1",
-    "user": "root",
-    "password": ";-;OtatOXD=P",
+    "user": "captain",
+    "password": "captain123",
     "database": "youthsmart",
     "port": 3308,
 }

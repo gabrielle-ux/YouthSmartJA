@@ -6,8 +6,8 @@ load_dotenv()
 
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "127.0.0.1"),
-    "user": os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", ";-;OtatOXD=P"),
+    "user": os.getenv("DB_USER", "captain"),
+    "password": os.getenv("DB_PASSWORD", "captain123"),
     "database": os.getenv("DB_NAME", "youthsmart"),
     "port": int(os.getenv("DB_PORT", 3308)),
 }

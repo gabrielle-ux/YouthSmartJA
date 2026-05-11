@@ -38,7 +38,7 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 N8N_WEBHOOK_URL = os.getenv(
     "N8N_WEBHOOK_URL",
-    "http://localhost:5678/webhook/guidance-courses"
+    "http://localhost:5678/webhook-test/guidance-mode"
 )
 
 app = Flask(__name__)
@@ -277,9 +277,9 @@ def get_guidance_courses(job_id):
                 "missing_skills": skills,
                 "skills": skills
             },
-            timeout=15
+            timeout=60
         )
-
+        
         n8n_response.raise_for_status()
         n8n_data = n8n_response.json()
 
@@ -294,6 +294,7 @@ def get_guidance_courses(job_id):
 
     # 6. Extract courses from n8n response
     courses = (
+        
         n8n_data.get("courses")
         or n8n_data.get("recommendations")
         or []

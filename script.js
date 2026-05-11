@@ -575,15 +575,15 @@ function calculatePreferenceScore(job){
 
 
 function getJobCategory(matchScore, prefScore){
-  if(prefScore >= 75 && matchScore >= 75){
+  if(prefScore >= 50 && matchScore >= 50){
     return "High Preference + High Match";
   }
 
-  if(prefScore >= 75 && matchScore < 75){
+  if(prefScore >= 50 && matchScore < 50){
     return "High Preference + Low Match";
   }
 
-  if(prefScore < 75 && matchScore >= 75){
+  if(prefScore < 50 && matchScore >= 50){
     return "Low Preference + High Match";
   }
 
