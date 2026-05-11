@@ -1065,7 +1065,7 @@ async function runGuidance(jobId){
         Find Courses
       </button>
     `;
-
+             panel.scrollIntoView({ behavior: "smooth" });
   }catch(error){
     panel.innerHTML = `<p class="muted">Could not connect to backend.</p>`;
     logApi("GUIDANCE ERROR", { error:error.message });
