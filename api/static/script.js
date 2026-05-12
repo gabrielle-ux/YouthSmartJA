@@ -633,8 +633,8 @@ function calculatePreferenceScore(job){
     ${job.country || ""}
   `.toLowerCase();
 
-  if(jobType     && text.includes(jobType.toLowerCase()))     score += 0.40;
-  if(workStyle   && text.includes(workStyle.toLowerCase()))   score += 0.30;
+  if(jobType     && text.includes(jobType.toLowerCase()))       score += 0.40;
+  if(workStyle   && text.includes(workStyle.toLowerCase()))     score += 0.30;
   if(availability && text.includes(availability.toLowerCase())) score += 0.30;
 
   return Math.min(score, 1);
@@ -652,6 +652,13 @@ function getJobCategory(matchScore, prefScore){
 function renderJobs(jobs){
   const feed = document.getElementById("jobFeed");
   if(!feed) return;
+
+  // Sort highest match score first
+  jobs = [...jobs].sort((a, b) => {
+    const scoreA = a.match_score ?? a.similarity ?? a.score ?? 0;
+    const scoreB = b.match_score ?? b.similarity ?? b.score ?? 0;
+    return scoreB - scoreA;
+  });
 
   if(!jobs.length){
     feed.innerHTML = `<p class="muted">No jobs found. Try a different search or adjust your filters.</p>`;
@@ -707,66 +714,6 @@ function renderJobs(jobs){
   updateCareerReadiness(Math.round(totalFinal / jobs.length));
 }
 
-
-async function viewJobDetails(jobId){
-  const panel = document.getElementById("guidancePanel");
-  if(!panel) return;
-
-  panel.innerHTML = `<p class="muted">Loading job details...</p>`;
-
-  try{
-    const res = await fetch(`${API_BASE}/api/jobs/${jobId}`, { headers:authHeaders() });
-    const data = await res.json();
-    const job = data.job || data;
-
-    logApi("JOB DETAILS RESPONSE", data);
-
-    if(!res.ok){
-      panel.innerHTML = `<p class="muted">Could not load job details.</p>`;
-      return;
-    }
-
-    const realJobId = getJobId(job);
-    const jobLink   = getJobLink(job);
-
-    panel.innerHTML = `
-      <div style="border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:1rem;margin-bottom:1.5rem">
-        <h3 style="margin:0 0 0.25rem">${escapeHTML(job.title || "Job Details")}</h3>
-        <p class="muted" style="margin:0">${escapeHTML(job.company || "Unknown Company")} · ${escapeHTML(job.city || job.country || "Jamaica")}</p>
-        ${job.salary_min ? `
-          <p style="margin:0.5rem 0 0;font-size:0.85rem;color:#2dc4b3;font-weight:600">
-            $${escapeHTML(String(job.salary_min))} – $${escapeHTML(String(job.salary_max))} / ${escapeHTML((job.salary_period || "").toLowerCase())}
-          </p>` : ""}
-      </div>
-      ${job.skills?.length ? `
-        <div style="margin-bottom:1.5rem">
-          <p class="muted small" style="margin:0 0 0.5rem">Required Skills</p>
-          <div class="tag-list">
-            ${job.skills.map(s => `<span class="tag">${escapeHTML(s)}</span>`).join("")}
-          </div>
-        </div>` : ""}
-      <div style="margin-bottom:1.5rem">
-        <p class="muted small" style="margin:0 0 0.75rem">About this role</p>
-        <div style="font-size:0.88rem;line-height:1.75;color:var(--text-muted,#8899a6);max-height:320px;overflow-y:auto;padding-right:0.5rem;white-space:pre-line;">
-          ${escapeHTML(job.description || "No description available.")}
-        </div>
-      </div>
-      <div class="job-actions">
-        ${jobLink ? `<a href="${escapeHTML(jobLink)}" target="_blank" class="btn primary-btn">Apply Externally</a>` : ""}
-        <button class="btn ghost-btn"   onclick="runGuidance(${realJobId})">Guidance Mode</button>
-        <button class="btn primary-btn" onclick="bookmarkJob(${realJobId})">Bookmark</button>
-      </div>
-    `;
-
-    panel.scrollIntoView({ behavior:"smooth" });
-
-  }catch(error){
-    panel.innerHTML = `<p class="muted">Could not connect to backend.</p>`;
-    logApi("JOB DETAILS ERROR", { error:error.message });
-  }
-}
-
-
 function updateCareerReadiness(score){
   const box = document.getElementById("careerReadiness");
   if(box){ box.textContent = `${score || "--"}%`; }
@@ -800,16 +747,6 @@ function filterSoftSkills(steps){
 
 function filterSoftSkillTags(skills){
   return skills.filter(s => !SOFT_SKILLS_FRONTEND.has((s || "").toLowerCase()));
-}
-
-function costToTime(skillCost){
-  if(skillCost <= 1.8) return "~1-2 weeks";
-  if(skillCost <= 2.5) return "~3-4 weeks";
-  if(skillCost <= 3.5) return "~1-2 months";
-  if(skillCost <= 4.5) return "~2-3 months";
-  if(skillCost <= 5.5) return "~3-6 months";
-  if(skillCost <= 7.0) return "~6-9 months";
-  return "~9-12 months";
 }
 
 function isSoftwareJob(jobTitle){
@@ -938,17 +875,14 @@ async function loadCourses(jobId){
     const data = await res.json();
     logApi("COURSES RESPONSE", data);
 
-    // 1. CHECK FOR ERROR FROM FLASK
-    if (!res.ok || data.ok === false) {
+    if(!res.ok || data.ok === false){
       courseSection.innerHTML = `<p class="muted">Error: ${data.error || "Could not load courses."}</p>`;
       return;
     }
-    // const courses = data.courses || data.recommendations || [];
 
-    const courses = data.courses || [];
+    const courses   = data.courses || [];
     const aiMessage = data.message || "Recommended courses for your path:";
 
-    // AI Agent response
     courseSection.innerHTML = `
       <div class="ai-guidance-intro">
         <h3 class="sub">Course Recommendations</h3>
@@ -962,9 +896,8 @@ async function loadCourses(jobId){
               <span class="dot dot-3"></span>
               <div>
                 <strong>${escapeHTML(course.name)}</strong>
-                <a href="${course.link}" target="_blank" class="course-link">
-                  Here's the link!
-                </a>
+                <p class="small muted">${escapeHTML(course.guidance_note || "")}</p>
+                <a href="${course.link}" target="_blank" class="course-link">${escapeHTML(course.phrase || "View Course")}</a>
               </div>
             </div>`).join("")
           : `<p class="muted">No specific courses found for these skills.</p>`}
@@ -1021,13 +954,14 @@ async function loadBookmarks(){
       return;
     }
 
-      box.innerHTML = bookmarks.map(job => {
+    box.innerHTML = bookmarks.map(job => {
       const jobId = job.job_id || job.id;
       return `
         <div class="job-card">
           <h3>${escapeHTML(job.title || "Saved Job")}</h3>
           <p class="muted">${escapeHTML(job.company || "Unknown Company")}</p>
           <div class="job-actions">
+            <a href="/jobs/${jobId}" class="btn ghost-btn">View Details</a>
             <button class="btn ghost-btn"   onclick="runGuidance(${jobId})">Guidance Mode</button>
             <button class="btn primary-btn" onclick="removeBookmark(${jobId})">Remove</button>
           </div>
@@ -1066,10 +1000,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   const storedName = localStorage.getItem("ys_user_name");
 
   // 1. GLOBAL AUTH CHECK
-  // Only redirect if NOT on a public page — prevents infinite loop on /register.
+  // Public pages + /jobs/* detail pages don't redirect to login.
   const publicPages = ["/register", "/", "/about"];
+  const isPublic = publicPages.includes(window.location.pathname)
+                || window.location.pathname.startsWith("/jobs/");
+
   if(!token){
-    if(!publicPages.includes(window.location.pathname)){
+    if(!isPublic){
       window.location.href = "/register";
     }
     return;
@@ -1091,7 +1028,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
 
   // 4. BOOKMARKS — runs on ANY page that has a bookmarkList element
-  // Decoupled from jobFeed so bookmarks show on dashboard too.
   if(document.getElementById("bookmarkList")){
     await loadBookmarks();
   }

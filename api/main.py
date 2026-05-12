@@ -51,12 +51,11 @@ def build_keywords_for_docs(docs, top_n=25):
 
 DB_CONFIG = {
     "host": "127.0.0.1",
-    "user": "captain",
-    "password": "captain123",
+    "user": "root",
+    "password": "Happy321",
     "database": "youthsmart",
-    "port": 3308,
+    "port": 3306,
 }
-
 HEADERS = {
     "x-rapidapi-key": "a40f668125msh607e60737cc3d96p1d1220jsn6475fb023e24",
     "x-rapidapi-host": "jsearch.p.rapidapi.com",
