@@ -40,6 +40,30 @@ function showMessage(message){
   }
 }
 
+function showFlash(message, type = "success") {
+  const flash = document.createElement("div");
+  flash.textContent = message;
+  flash.style.cssText = `
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    background: ${type === "success" ? "#2dc4b3" : "#e74c3c"};
+    color: #0f1a1f;
+    font-weight: 600;
+    font-size: 0.9rem;
+    z-index: 9999;
+    box-shadow: 0 8px 32px -8px rgba(0,0,0,.4);
+    transition: opacity 0.5s ease;
+  `;
+  document.body.appendChild(flash);
+  setTimeout(() => {
+    flash.style.opacity = "0";
+    setTimeout(() => flash.remove(), 500);
+  }, 3000);
+}
+
 function showDashboard(){
   const dashboard = document.getElementById("dashboard");
 
@@ -55,30 +79,6 @@ function hideDashboard(){
   if(dashboard){
     dashboard.classList.add("hidden");
   }
-}
-
-function showFlash(message, type = "success") {
-    const flash = document.createElement("div");
-    flash.textContent = message;
-    flash.style.cssText = `
-        position: fixed;
-        top: 80px;
-        right: 20px;
-        padding: 12px 20px;
-        border-radius: 8px;
-        background: ${type === "success" ? "#2dc4b3" : "#e74c3c"};
-        color: #0f1a1f;
-        font-weight: 600;
-        font-size: 0.9rem;
-        z-index: 9999;
-        box-shadow: 0 8px 32px -8px rgba(0,0,0,.4);
-        transition: opacity 0.5s ease;
-    `;
-    document.body.appendChild(flash);
-    setTimeout(() => {
-        flash.style.opacity = "0";
-        setTimeout(() => flash.remove(), 500);
-    }, 3000);
 }
 
 function getJobId(job){
@@ -113,16 +113,13 @@ document.querySelectorAll(".nav-links a").forEach(link => {
   link.addEventListener("click", (e) => {
     const href = link.getAttribute("href");
 
-    // ONLY prevent default if it's a same-page scroll (starts with #)
-    // If it starts with / (like /features), let the browser change pages!
-    if (href.startsWith("#")) {
-      e.preventDefault(); 
+    if(href.startsWith("#")){
+      e.preventDefault();
       const target = document.querySelector(href);
-      if (target) target.scrollIntoView({ behavior: "smooth" });
+      if(target) target.scrollIntoView({ behavior:"smooth" });
     }
-    
-    // Close mobile menu if it's open
-    if (navLinks) navLinks.classList.remove("open");
+
+    if(navLinks) navLinks.classList.remove("open");
   });
 });
 
@@ -151,25 +148,23 @@ window.addEventListener("DOMContentLoaded", revealOnScroll);
 // ===============================
 // ACTIVE NAVIGATION LINK
 // ===============================
-
-function activateNavLink() {
-  const currentPath = window.location.pathname; // Gets the current URL path
+function activateNavLink(){
+  const currentPath = window.location.pathname;
   const navItems = document.querySelectorAll(".nav-links a");
 
   navItems.forEach(link => {
     link.classList.remove("active");
-    
-    // Check if the link's href matches the current URL path
+
     const linkPath = link.getAttribute("href");
-    
-    if (currentPath === linkPath || (currentPath === "/" && linkPath === "/")) {
+
+    if(currentPath === linkPath || (currentPath === "/" && linkPath === "/")){
       link.classList.add("active");
     }
   });
 }
 
-// Run on load
 window.addEventListener("load", activateNavLink);
+
 
 // ===============================
 // PARALLAX BLOBS
@@ -396,9 +391,9 @@ if(loginForm){
       }
 
       showMessage("Login successful.");
-      
+
       setTimeout(() => {
-          window.location.href = "/dashboard"; 
+        window.location.href = "/dashboard";
       }, 1000);
 
       await loadSavedResume();
@@ -420,12 +415,9 @@ const logoutBtn = document.getElementById("logoutBtn");
 
 if(logoutBtn){
   logoutBtn.addEventListener("click", () => {
-    // 1. Clear the local data
     localStorage.removeItem("ys_token");
     localStorage.removeItem("ys_user_name");
 
-    // 2. Redirect to the home page (index.html)
-    // This effectively "hides" the dashboard because they are leaving the page
     window.location.href = "/";
   });
 }
@@ -1096,7 +1088,9 @@ async function runGuidance(jobId){
         Find Courses
       </button>
     `;
-             panel.scrollIntoView({ behavior: "smooth" });
+
+    panel.scrollIntoView({ behavior:"smooth" });
+
   }catch(error){
     panel.innerHTML = `<p class="muted">Could not connect to backend.</p>`;
     logApi("GUIDANCE ERROR", { error:error.message });
@@ -1170,7 +1164,7 @@ async function bookmarkJob(jobId){
     logApi("BOOKMARK RESPONSE", data);
 
     if(res.ok){
-      alert("Job bookmarked.");
+      showFlash("Job bookmarked successfully!");
       await loadBookmarks();
     }else{
       alert(data.msg || data.error || "Could not bookmark job.");
@@ -1255,36 +1249,29 @@ async function removeBookmark(jobId){
 // DASHBOARD & AUTH STATE CONTROL
 // ===============================
 window.addEventListener("DOMContentLoaded", async () => {
-    const dashboard = document.getElementById("dashboard");
-    const token = getToken();
-    const storedName = localStorage.getItem("ys_user_name");
+  const dashboard = document.getElementById("dashboard");
+  const token = getToken();
+  const storedName = localStorage.getItem("ys_user_name");
 
-    // 1. Handle Dashboard Page Logic
-    if (dashboard) {
-        // Security Check: If no token, kick them out to register/login
-        if (!token) {
-            window.location.href = "/register";
-            return; 
-        }
-
-        // If we have a token, show the dashboard
-        dashboard.classList.remove("hidden");
-
-        // Set the User Name
-        const nameBox = document.getElementById("currentUserName");
-        if (nameBox && storedName) {
-            nameBox.textContent = storedName;
-        }
-
-        // Load the data
-        await loadSavedResume();
-        await loadMatches();
-        await loadBookmarks();
+  if(dashboard){
+    if(!token){
+      window.location.href = "/register";
+      return;
     }
 
-    // 2. Handle Navbar Updates (Optional: useful for index.html too)
-    // If you want to show/hide certain links based on login state
-    if (token) {
-        console.log("User is logged in as:", storedName);
+    dashboard.classList.remove("hidden");
+
+    const nameBox = document.getElementById("currentUserName");
+    if(nameBox && storedName){
+      nameBox.textContent = storedName;
     }
+
+    await loadSavedResume();
+    await loadMatches();
+    await loadBookmarks();
+  }
+
+  if(token){
+    console.log("User is logged in as:", storedName);
+  }
 });

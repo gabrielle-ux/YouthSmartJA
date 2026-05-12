@@ -28,13 +28,14 @@ log = logging.getLogger(__name__)
 
 DB_CONFIG = {
     "host": "127.0.0.1",
-    "user": "captain",
-    "password": "captain123",
+    "user": "root",
+    "password": "Happy321",
     "database": "youthsmart",
-    "port": 3308,
+    "port": 3306,
     "pool_name": "ysja_pool",
     "pool_size": 5,
 }
+
 
 _pool: MySQLConnectionPool | None = None
 
