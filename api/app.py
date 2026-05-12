@@ -39,7 +39,7 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 N8N_WEBHOOK_URL = os.getenv(
     "N8N_WEBHOOK_URL",
-    "http://localhost:5678/webhook/guidance-courses"
+    "http://localhost:5678/webhook-test/guidance-mode"
 )
 
 app = Flask(__name__)
@@ -97,6 +97,26 @@ def allowed_file(filename: str) -> bool:
     ext = filename.rsplit(".", 1)[1].lower()
     return ext in ALLOWED_EXTENSIONS
 
+
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+@app.route('/features')
+def features():
+    return render_template('features.html')
+
+@app.route('/about')
+def about():
+    return render_template('about.html')
+
+@app.route('/register')
+def register():
+    return render_template('register.html')
+
+@app.route('/dashboard')
+def dashboard_page():
+    return render_template('dashboard.html')
 
 # ---------------------------------------------------------------------------
 # Auth Test Page
@@ -315,9 +335,9 @@ def get_guidance_courses(job_id):
                 "missing_skills": skills,
                 "skills": skills
             },
-            timeout=15
+            timeout=60
         )
-
+        
         n8n_response.raise_for_status()
         n8n_data = n8n_response.json()
 
@@ -331,6 +351,7 @@ def get_guidance_courses(job_id):
         }), 502
 
     courses = (
+        
         n8n_data.get("courses")
         or n8n_data.get("recommendations")
         or []

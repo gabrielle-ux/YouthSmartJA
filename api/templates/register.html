@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register/Login — YouthSmartJA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"/>
+</head>
+<body>
+
+<nav class="navbar">
+  <span class="brand">YouthSmartJA</span>
+  <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/features">Features</a>
+    <a href="/about">How It Works</a>
+    <a href="/register">Login/Register</a>
+    <a href="/dashboard">Dashboard</a>
+  </div>
+</nav>
+
+<section id="auth" class="slide">
+  <h2>Login or Create Account</h2>
+
+  <div class="auth-shell reveal">
+    <div class="auth-tabs">
+      <button class="auth-tab active" data-tab="login">Login</button>
+      <button class="auth-tab" data-tab="register">Register</button>
+    </div>
+
+    <form id="loginForm" class="auth-form active">
+      <input id="loginEmail" type="email" placeholder="Email" required>
+      <input id="loginPassword" type="password" placeholder="Password" required>
+      <button class="btn primary-btn" type="submit">Login</button>
+    </form>
+<form id="registerForm" class="auth-form">
+  <input id="registerName" type="text" placeholder="Full name" required>
+
+  <input id="registerEmail" type="email" placeholder="Email" required>
+
+  <input id="registerPassword" type="password" placeholder="Password" required>
+
+  <select id="registerRole">
+    <option value="student">Student</option>
+  </select>
+
+  <button class="btn primary-btn" type="submit">
+    Create Account
+  </button>
+</form>
+
+    <p id="authMessage" class="muted auth-message"></p>
+  </div>
+</section>
+
+<script src="{{ url_for('static', filename='script.js') }}" defer></script>
+</body>
+</html>
