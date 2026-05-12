@@ -343,7 +343,7 @@ def get_guidance_courses(job_id):
                 "missing_skills": skills,
                 "skills": skills
             },
-            timeout=120
+            timeout=180
         )
         
         n8n_response.raise_for_status()

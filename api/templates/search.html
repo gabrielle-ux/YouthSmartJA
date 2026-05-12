@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Job Details — YouthSmartJA</title>
-  <meta name="description" content="Job details and career guidance."/>
+  <title>YouthSmartJA — Search Jobs</title>
+  <meta name="description" content="AI-powered career guidance platform for Jamaican youth."/>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
@@ -15,7 +15,9 @@
 
 <nav class="navbar">
   <span class="brand">YouthSmartJA</span>
+
   <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+
   <div class="nav-links">
     <a href="/">Home</a>
     <a href="/dashboard">Dashboard</a>
@@ -23,149 +25,84 @@
   </div>
 </nav>
 
-<section class="slide dashboard-section" style="padding-top: 6rem;">
+<section id="search-page" class="slide">
+  <h2>Job Opportunities</h2>
+    <div class="dashboard-grid">
+        <div class="dash-card wide reveal">
+            <h3>Search Jobs</h3>
 
-  <!-- Back button -->
-  <div style="margin-bottom: 1.5rem;">
-    <a href="/search" class="btn ghost-btn" style="display:inline-flex;align-items:center;gap:0.4rem;">
-      ← Back to Jobs
-    </a>
-  </div>
+            <input id="jobSearchInput" type="text" placeholder="Search software, data, design...">
+            <button id="searchJobsBtn" class="btn primary-btn">Search Jobs</button>
+            <button id="openFilterBtn" class="btn primary-btn">Filter Jobs</button>
+        </div>
 
-  <div class="dashboard-grid">
+        <!-- The Sidebar Container -->
+        <div id="filterSidebar" class="filter-sidebar">
+            <div class="sidebar-header">
+                <h3>Preference Filtering</h3>
+                <button id="closeFilterBtn" class="close-btn">&times;</button>
+            </div>
+            
+            <div class="sidebar-content">
+                <input id="careerInterestPref" type="text" placeholder="Career Interest">
+                <select id="jobTypePref">
+                    <option value="">Preferred Job Type</option>
+                    <option value="Internship">Internship</option>
+                    <option value="Part-time">Part-time</option>
+                    <option value="Full-time">Full-time</option>
+                    <option value="Freelance">Freelance</option>
+                </select>
 
-    <!-- Job Details Card -->
-    <div class="dash-card wide reveal" id="jobDetailCard">
-      <p class="muted">Loading job details...</p>
-    </div>
+                <select id="workStylePref">
+                    <option value="">Work Style</option>
+                    <option value="Remote">Remote</option>
+                    <option value="Hybrid">Hybrid</option>
+                    <option value="On-site">On-site</option>
+                </select>
 
-    <!-- Guidance Mode Card -->
-    <div class="dash-card wide reveal" id="guidanceCard" style="display:none;">
-      <h3>Selected Job Guidance</h3>
-      <div id="guidancePanel">
-        <p class="muted">Click Guidance Mode to generate your learning roadmap.</p>
-      </div>
-    </div>
+                <select id="availabilityPref">
+                    <option value="">Availability</option>
+                    <option value="Weekends">Weekends</option>
+                    <option value="Evenings">Evenings</option>
+                    <option value="Summer">Summer</option>
+                    <option value="Flexible">Flexible</option>
+                </select>
+                <button id="savePrefsBtn" class="btn ghost-btn">Save Preferences</button>
+            </div>
+        </div>
 
-    <!-- API Log -->
-    <div class="dash-card wide reveal">
-      <h3>API Log</h3>
-      <pre id="apiLog">Waiting for actions...</pre>
-    </div>
+        <!-- Optional Backdrop to dim the screen when open -->
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
 
+        <div class="dash-card wide reveal">
+        <h3>Matched Job Feed</h3>
+        <p class="muted">
+            Jobs are grouped by match and preference strength.
+        </p>
+
+        <div id="jobFeed" class="job-feed">
+            <p class="muted">Your matched jobs will appear here after resume upload.</p>
+        </div>
+        </div>
+
+        <div class="dash-card wide reveal">
+        <h3>Selected Job Guidance</h3>
+
+        <div id="guidancePanel">
+            <p class="muted">Select a job and run Guidance Mode.</p>
+        </div>
+        </div>
+
+        <div class="dash-card wide reveal">
+       
+        <h3>API Log</h3>
+        <pre id="apiLog">Waiting for actions...</pre>
+        </div>
+
+    <div>
   </div>
 </section>
 
 <script src="{{ url_for('static', filename='script.js') }}" defer></script>
-
-<script>
-// Get job ID from URL path e.g. /jobs/458 → 458
-const JOB_ID = parseInt(window.location.pathname.split("/").pop());
-
-async function loadJobDetail(){
-  const card = document.getElementById("jobDetailCard");
-  if(!card || !JOB_ID) return;
-
-  try{
-    const res = await fetch(`http://127.0.0.1:5000/api/jobs/${JOB_ID}`, {
-      headers: { "Authorization": `Bearer ${localStorage.getItem("ys_token")}` }
-    });
-
-    const data = await res.json();
-    const job  = data.job || data;
-
-    if(!res.ok){
-      card.innerHTML = `<p class="muted">Could not load job details.</p>`;
-      return;
-    }
-
-    const applyLink = job.apply_link || job.url || job.link || "";
-
-    card.innerHTML = `
-      <!-- Header -->
-      <div style="border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:1.25rem;margin-bottom:1.5rem;">
-        <h2 style="margin:0 0 0.25rem;">${escapeHTML(job.title || "Job Details")}</h2>
-        <p class="muted" style="margin:0;">
-          ${escapeHTML(job.company || "Unknown Company")}
-          &nbsp;·&nbsp;
-          ${escapeHTML(job.city || job.country || "Jamaica")}
-          ${job.is_remote ? ' &nbsp;·&nbsp; <span style="color:#2dc4b3;font-weight:600;">Remote</span>' : ""}
-        </p>
-        ${job.salary_min ? `
-          <p style="margin:0.5rem 0 0;font-size:0.9rem;color:#2dc4b3;font-weight:600;">
-            $${escapeHTML(String(job.salary_min))} – $${escapeHTML(String(job.salary_max))} / ${escapeHTML((job.salary_period || "").toLowerCase())}
-          </p>` : ""}
-      </div>
-
-      <!-- Skills -->
-      ${job.skills?.length ? `
-        <div style="margin-bottom:1.5rem;">
-          <p class="muted small" style="margin:0 0 0.5rem;">Required Skills</p>
-          <div class="tag-list">
-            ${job.skills.map(s => `<span class="tag">${escapeHTML(s)}</span>`).join("")}
-          </div>
-        </div>` : ""}
-
-      <!-- Degrees -->
-      ${job.degrees?.length ? `
-        <div style="margin-bottom:1.5rem;">
-          <p class="muted small" style="margin:0 0 0.5rem;">Education Requirements</p>
-          <div class="tag-list">
-            ${job.degrees.map(d => `<span class="tag">${escapeHTML(d)}</span>`).join("")}
-          </div>
-        </div>` : ""}
-
-      <!-- Description -->
-      <div style="margin-bottom:2rem;">
-        <p class="muted small" style="margin:0 0 0.75rem;">About This Role</p>
-        <div style="
-          font-size:0.9rem;
-          line-height:1.8;
-          color:var(--text-muted,#8899a6);
-          white-space:pre-line;
-        ">${escapeHTML(job.description || "No description available.")}</div>
-      </div>
-
-      <!-- Actions -->
-      <div class="job-actions">
-        ${applyLink ? `
-          <a href="${escapeHTML(applyLink)}" target="_blank" class="btn primary-btn">
-            Apply Now
-          </a>` : ""}
-        <button class="btn ghost-btn" onclick="openGuidance()">
-          Guidance Mode
-        </button>
-        <button class="btn primary-btn" onclick="bookmarkJob(${JOB_ID})">
-          Bookmark
-        </button>
-      </div>
-    `;
-
-  }catch(err){
-    card.innerHTML = `<p class="muted">Could not connect to backend.</p>`;
-  }
-}
-
-function openGuidance(){
-  const guidanceCard = document.getElementById("guidanceCard");
-  if(guidanceCard){
-    guidanceCard.style.display = "block";
-    guidanceCard.scrollIntoView({ behavior:"smooth" });
-  }
-  runGuidance(JOB_ID);
-}
-
-// Load job details on page load
-window.addEventListener("DOMContentLoaded", () => {
-  // Auth check
-  const token = localStorage.getItem("ys_token");
-  if(!token){
-    window.location.href = "/register";
-    return;
-  }
-  loadJobDetail();
-});
-</script>
-
 </body>
 </html>
