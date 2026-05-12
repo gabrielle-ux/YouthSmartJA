@@ -76,10 +76,6 @@ KNOWN_SKILLS = {
     "excel",
     "microsoft excel",
 
-    "power bi",
-    "tableau",
-    "reporting",
-    "dashboard",
     "data visualization",
 
     # ------------------------------------------------

@@ -130,15 +130,13 @@ def get_job_text(job: dict) -> str:
     """
     Build job text for matching.
 
-    FIX: triple the title weight and cap description at 800 chars.
-    Long descriptions dilute resume signal — a 5000-char job post vs a 500-char
-    resume means the resume terms get tiny TF-IDF weights. Capping description
-    and boosting the title brings scores into a more meaningful range.
+    We repeat the title to slightly boost
+    role importance in the vector space.
     """
     title = job.get("title", "") or ""
-    description = (job.get("description", "") or "")[:800]
+    description = job.get("description", "") or ""
 
-    return f"{title} {title} {title} {description}"
+    return f"{title} {title} {description}"
 
 
 def get_job_text_by_id(job_id: int) -> str:
@@ -161,7 +159,6 @@ def get_job_text_by_id(job_id: int) -> str:
         if not row:
             return ""
 
-        # FIX: use same capped get_job_text logic for consistency with cosine_match_jobs
         return get_job_text(row)
 
     finally:
@@ -196,6 +193,67 @@ def compute_preference_score(job: dict, preferences: list) -> float:
         score += 0.5
 
     return min(score, 1.0)
+
+
+# -----------------------------
+# KEYWORD EXTRACTION
+# Extracts top N keywords from a document as a space-separated string.
+# This fixes document length disparity bias in cosine similarity —
+# comparing 500-word resume vs 2000-word job description always
+# produces low cosine regardless of shared terms.
+# By extracting equal-length keyword sets from both, cosine reflects
+# true skill overlap rather than document length mismatch.
+# -----------------------------
+def extract_top_keywords(text: str, top_n: int = 50) -> str:
+    """
+    Extract top N TF-IDF keywords from a single document.
+    Returns them as a space-separated string for downstream vectorization.
+    """
+    text = clean_text(text)
+    if not text:
+        return ""
+
+    vec = TfidfVectorizer(
+        stop_words="english",
+        ngram_range=(1, 2),
+        max_features=5000,
+        sublinear_tf=True,
+    )
+
+    try:
+        X = vec.fit_transform([text])
+        terms = vec.get_feature_names_out()
+        scores = X.toarray()[0]
+        pairs = sorted(zip(terms, scores), key=lambda x: x[1], reverse=True)
+        keywords = [term for term, score in pairs if score > 0][:top_n]
+        return " ".join(keywords)
+    except Exception:
+        return text
+
+
+def keyword_cosine(text1: str, text2: str, top_n: int = 50) -> float:
+    """
+    Keyword-to-keyword cosine similarity.
+    Extracts top N keywords from each document independently,
+    then compares the two equal-length keyword sets.
+    This eliminates document length disparity bias.
+    """
+    kw1 = extract_top_keywords(text1, top_n=top_n)
+    kw2 = extract_top_keywords(text2, top_n=top_n)
+
+    if not kw1 or not kw2:
+        return 0.0
+
+    vec = TfidfVectorizer(
+        stop_words="english",
+        ngram_range=(1, 2),
+    )
+
+    try:
+        tfidf = vec.fit_transform([kw1, kw2])
+        return float(cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0])
+    except Exception:
+        return 0.0
 
 
 # -----------------------------
@@ -287,7 +345,15 @@ def cosine_match_jobs(user_id: int, limit: int = 10):
     corpus = [resume_text] + job_texts
 
     # -----------------------------
-    # TF-IDF Vectorization
+    # Extract keywords from resume
+    # Fixes document length disparity — resume (~500 words) vs
+    # job description (~2000 words) produces artificially low cosine.
+    # Comparing equal-length keyword sets gives accurate skill overlap.
+    # -----------------------------
+    resume_keywords = extract_top_keywords(resume_text, top_n=50)
+
+    # -----------------------------
+    # TF-IDF Vectorization (kept for preference scoring reference)
     # -----------------------------
     vectorizer = TfidfVectorizer(
         stop_words="english",
@@ -296,34 +362,23 @@ def cosine_match_jobs(user_id: int, limit: int = 10):
     )
 
     tfidf_matrix = vectorizer.fit_transform(corpus)
-
     resume_vector = tfidf_matrix[0:1]
     job_vectors = tfidf_matrix[1:]
 
-    # FIX: boost resume vector weight — resumes are short vs long job descriptions,
-    # so their TF-IDF vectors get low magnitudes. Multiplying by 2.5 compensates
-    # and brings match scores into a more meaningful range.
-    import numpy as np
-    resume_vector = resume_vector.multiply(2.5)
+    raw_scores = cosine_similarity(resume_vector, job_vectors)[0]
 
     # -----------------------------
-    # Cosine Similarity
-    # -----------------------------
-    scores = cosine_similarity(
-        resume_vector,
-        job_vectors
-    )[0]
-
-    # -----------------------------
-    # Build Results
+    # Build Results using keyword cosine
     # -----------------------------
     results = []
 
-    for job, score in zip(valid_jobs, scores):
+    for job, raw_score, job_text in zip(valid_jobs, raw_scores, job_texts):
 
-        if score > 0:
+        if raw_score > 0.08:
 
-            match_score = float(score)
+            # Keyword-to-keyword cosine — equal length comparison
+            job_keywords = extract_top_keywords(job_text, top_n=50)
+            match_score = keyword_cosine(resume_text, job_text, top_n=50)
 
             preference_score = compute_preference_score(
                 job,
