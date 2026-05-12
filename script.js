@@ -445,7 +445,7 @@ if(uploadResumeBtn){
     const status = document.getElementById("resumeStatus");
 
     if(!fileInput || !fileInput.files.length){
-      alert("Choose a resume first.");
+      showFlash("Choose a resume first.", "error");
       return;
     }
 
@@ -1163,10 +1163,10 @@ async function bookmarkJob(jobId){
     logApi("BOOKMARK RESPONSE", data);
 
     if(res.ok){
-      alert("Job bookmarked.");
+      showFlash("Job bookmarked successfully!");
       await loadBookmarks();
     }else{
-      alert(data.msg || data.error || "Could not bookmark job.");
+      showFlash(data.msg || data.error || "Could not bookmark job.", "error");
     }
 
   }catch(error){
