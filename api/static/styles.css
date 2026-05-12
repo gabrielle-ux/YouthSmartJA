@@ -809,3 +809,49 @@ footer{
     align-items:flex-start;
   }
 }
+
+/* Sidebar hidden off-screen to the right */
+.filter-sidebar {
+    position: fixed;
+    top: 0;
+    right: -400px; /* Adjust based on width */
+    width: 350px;
+    height: 100%;
+    background: #1a1a1a; /* Match your dashboard theme */
+    box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+    z-index: 1000;
+    transition: right 0.3s ease-in-out;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Slide in state */
+.filter-sidebar.active {
+    right: 0;
+}
+
+/* Background overlay */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    z-index: 999;
+}
+
+.sidebar-overlay.active {
+    display: block;
+}
+
+/* Close button style */
+.close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+}

@@ -118,6 +118,10 @@ def register():
 def dashboard_page():
     return render_template('dashboard.html')
 
+@app.route('/search')
+def search():
+    return render_template('search.html')
+
 # ---------------------------------------------------------------------------
 # Auth Test Page
 # ---------------------------------------------------------------------------

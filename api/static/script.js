@@ -566,11 +566,32 @@ async function loadSavedResume(){
 
 
 // ===============================
-// PREFERENCES
+// PREFERENCES & SIDEBAR CONTROL
 // ===============================
+const filterSidebar = document.getElementById("filterSidebar");
+const sidebarOverlay = document.getElementById("sidebarOverlay");
+const openFilterBtn = document.getElementById("openFilterBtn");
+const closeFilterBtn = document.getElementById("closeFilterBtn");
 const savePrefsBtn = document.getElementById("savePrefsBtn");
 
-if(savePrefsBtn){
+// --- 1. Toggle Sidebar Logic ---
+const hideSidebar = () => {
+  if (filterSidebar) filterSidebar.classList.remove("active");
+  if (sidebarOverlay) sidebarOverlay.classList.remove("active");
+};
+
+if (openFilterBtn) {
+  openFilterBtn.addEventListener("click", () => {
+    filterSidebar.classList.add("active");
+    sidebarOverlay.classList.add("active");
+  });
+}
+
+if (closeFilterBtn) closeFilterBtn.addEventListener("click", hideSidebar);
+if (sidebarOverlay) sidebarOverlay.addEventListener("click", hideSidebar);
+
+// --- 2. Save Preferences Logic ---
+if (savePrefsBtn) {
   savePrefsBtn.addEventListener("click", () => {
     const jobType =
       document.getElementById("jobTypePref")?.value ||
@@ -581,10 +602,16 @@ if(savePrefsBtn){
       document.getElementById("locationPref")?.value ||
       "";
 
+    // Saving to localStorage
     localStorage.setItem("ys_pref_job_type", jobType);
     localStorage.setItem("ys_pref_location", location);
 
     showFlash("Preferences saved successfully!");
+    
+    // Close the sidebar after saving
+    hideSidebar();
+    
+    // Refresh the job list
     loadMatches();
   });
 }
@@ -1084,10 +1111,11 @@ async function runGuidance(jobId){
           `}).join("");
         })()}
       </div>
-
-      <button class="btn primary-btn" style="margin-top:1.5rem" onclick="loadCourses(${jobId})">
-        Find Courses
-      </button>
+      <div id="courseSection">
+        <button id="loadCoursesBtn" class="btn primary-btn" style="margin-top:1.5rem" onclick="loadCourses(${jobId})">
+          Find Courses
+        </button>
+      </div>
     `;
 
     panel.scrollIntoView({ behavior:"smooth" });
@@ -1102,9 +1130,10 @@ async function runGuidance(jobId){
 // COURSE RECOMMENDATIONS
 // ===============================
 async function loadCourses(jobId){
-  const panel = document.getElementById("guidancePanel");
+  const courseSection = document.getElementById("courseSection");
+  if(!courseSection) return;
 
-  if(!panel) return;
+  courseSection.innerHTML = `<p class="muted">Fetching course recommendations...</p>`;
 
   try{
     const res = await fetch(`${API_BASE}/api/jobs/${jobId}/guidance-courses`, {
@@ -1141,8 +1170,9 @@ async function loadCourses(jobId){
     // `;
 
     // AI Agent response
-    panel.innerHTML = `
+    courseSection.innerHTML = `
       <div class="ai-guidance-intro">
+        <h3 class="sub">Course Recommendations</h3>
         <p class="lede-sm">${escapeHTML(aiMessage)}</p>
       </div>
       <h3 class="sub">Learning Path</h3>
@@ -1278,29 +1308,30 @@ async function removeBookmark(jobId){
 // DASHBOARD & AUTH STATE CONTROL
 // ===============================
 window.addEventListener("DOMContentLoaded", async () => {
-  const dashboard = document.getElementById("dashboard");
   const token = getToken();
   const storedName = localStorage.getItem("ys_user_name");
 
-  if(dashboard){
-    if(!token){
-      window.location.href = "/register";
-      return;
-    }
-
-    dashboard.classList.remove("hidden");
-
-    const nameBox = document.getElementById("currentUserName");
-    if(nameBox && storedName){
-      nameBox.textContent = storedName;
-    }
-
-    await loadSavedResume();
-    await loadMatches();
-    await loadBookmarks();
+  // 1. GLOBAL AUTH CHECK: If no token, kick them to login
+  if (!token) {
+    window.location.href = "/register";
+    return;
   }
 
-  if(token){
-    console.log("User is logged in as:", storedName);
+  // 2. DASHBOARD PAGE LOGIC
+  const dashboard = document.getElementById("dashboard");
+  if (dashboard) {
+    dashboard.classList.remove("hidden");
+    const nameBox = document.getElementById("currentUserName");
+    if (nameBox && storedName) nameBox.textContent = storedName;
+    
+    await loadSavedResume(); // Dashboard only needs the resume/skills
+  }
+
+  // 3. JOBS PAGE LOGIC
+  const jobFeed = document.getElementById("jobFeed");
+  if (jobFeed) {
+    // Only load these on the jobs page
+    await loadMatches();
+    await loadBookmarks();
   }
 });
