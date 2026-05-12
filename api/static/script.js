@@ -302,9 +302,6 @@ if(registerForm){
 
       availability:
         document.getElementById("availability")?.value || "",
-
-      learning_goals:
-        document.getElementById("learningGoals")?.value?.trim() || ""
     };
 
     try{
@@ -688,20 +685,18 @@ async function loadMatches(){
 function calculatePreferenceScore(job){
   const careerInterest =
     document.getElementById("careerInterest")?.value ||
+    document.getElementById("careerInterestPref")?.value ||
     "";
 
   const preferredJobType =
-    document.getElementById("preferredJobType")?.value ||
     document.getElementById("jobTypePref")?.value ||
+    document.getElementById("preferredJobType")?.value ||
     localStorage.getItem("ys_pref_job_type") ||
     "";
 
   const workStyle =
+    document.getElementById("workStylePref")?.value ||
     document.getElementById("workStyle")?.value ||
-    "";
-
-  const learningGoals =
-    document.getElementById("learningGoals")?.value ||
     "";
 
   let score = 0;
@@ -716,32 +711,16 @@ function calculatePreferenceScore(job){
     ${job.country || ""}
   `.toLowerCase();
 
-  if(
-    careerInterest &&
-    text.includes(careerInterest.toLowerCase())
-  ){
-    score += 0.35;
+  if(careerInterest && text.includes(careerInterest.toLowerCase())){
+    score += 0.40;
   }
 
-  if(
-    preferredJobType &&
-    text.includes(preferredJobType.toLowerCase())
-  ){
-    score += 0.25;
+  if(preferredJobType && text.includes(preferredJobType.toLowerCase())){
+    score += 0.30;
   }
 
-  if(
-    workStyle &&
-    text.includes(workStyle.toLowerCase())
-  ){
-    score += 0.20;
-  }
-
-  if(
-    learningGoals &&
-    text.includes(learningGoals.toLowerCase())
-  ){
-    score += 0.20;
+  if(workStyle && text.includes(workStyle.toLowerCase())){
+    score += 0.30;
   }
 
   return Math.min(score, 1);
@@ -870,9 +849,10 @@ async function viewJobDetails(jobId){
       headers:authHeaders()
     });
 
-    const job = await res.json();
+    const data = await res.json();
+    const job = data.job || data;
 
-    logApi("JOB DETAILS RESPONSE", job);
+    logApi("JOB DETAILS RESPONSE", data);
 
     if(!res.ok){
       panel.innerHTML = `<p class="muted">Could not load job details.</p>`;
@@ -883,36 +863,45 @@ async function viewJobDetails(jobId){
     const jobLink = getJobLink(job);
 
     panel.innerHTML = `
-      <h3>${escapeHTML(job.title || "Job Details")}</h3>
+      <div style="border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:1rem;margin-bottom:1.5rem">
+        <h3 style="margin:0 0 0.25rem">${escapeHTML(job.title || "Job Details")}</h3>
+        <p class="muted" style="margin:0">${escapeHTML(job.company || "Unknown Company")} · ${escapeHTML(job.city || job.country || "Jamaica")}</p>
 
-      <p class="muted">
-        ${escapeHTML(job.company || "Unknown Company")}
-        ·
-        ${escapeHTML(job.city || job.location || job.country || "Jamaica")}
-      </p>
+        ${job.salary_min ? `
+          <p style="margin:0.5rem 0 0;font-size:0.85rem;color:#2dc4b3;font-weight:600">
+            $${escapeHTML(String(job.salary_min))} – $${escapeHTML(String(job.salary_max))} / ${escapeHTML((job.salary_period || "").toLowerCase())}
+          </p>
+        ` : ""}
+      </div>
 
-      <p style="margin-top:1rem;">
-        ${escapeHTML(job.description || "No description available.")}
-      </p>
+      ${job.skills?.length ? `
+        <div style="margin-bottom:1.5rem">
+          <p class="muted small" style="margin:0 0 0.5rem">Required Skills</p>
+          <div class="tag-list">
+            ${job.skills.map(s => `<span class="tag">${escapeHTML(s)}</span>`).join("")}
+          </div>
+        </div>
+      ` : ""}
 
-      <div class="job-actions" style="margin-top:1.5rem;">
-        ${
-          jobLink
-          ? `
-            <a href="${escapeHTML(jobLink)}" target="_blank" class="btn primary-btn">
-              Apply Externally
-            </a>
-          `
-          : ""
-        }
+      <div style="margin-bottom:1.5rem">
+        <p class="muted small" style="margin:0 0 0.75rem">About this role</p>
+        <div style="
+          font-size:0.88rem;
+          line-height:1.75;
+          color:var(--text-muted,#8899a6);
+          max-height:320px;
+          overflow-y:auto;
+          padding-right:0.5rem;
+          white-space:pre-line;
+        ">${escapeHTML(job.description || "No description available.")}</div>
+      </div>
 
-        <button class="btn ghost-btn" onclick="runGuidance(${realJobId})">
-          Guidance Mode
-        </button>
-
-        <button class="btn primary-btn" onclick="bookmarkJob(${realJobId})">
-          Bookmark
-        </button>
+      <div class="job-actions">
+        ${jobLink ? `
+          <a href="${escapeHTML(jobLink)}" target="_blank" class="btn primary-btn">Apply Externally</a>
+        ` : ""}
+        <button class="btn ghost-btn" onclick="runGuidance(${realJobId})">Guidance Mode</button>
+        <button class="btn primary-btn" onclick="bookmarkJob(${realJobId})">Bookmark</button>
       </div>
     `;
 
@@ -937,11 +926,39 @@ function updateCareerReadiness(score){
 
 
 // ===============================
-// GUIDANCE MODE
-// ===============================
-// ===============================
 // GUIDANCE HELPERS
 // ===============================
+const SOFT_SKILLS_FRONTEND = new Set([
+  // generic soft skills
+  "communication", "teamwork", "attention to detail", "problem solving",
+  "leadership", "time management", "critical thinking", "adaptability",
+  "professionalism", "organization", "public speaking", "presentation",
+  "research", "writing", "word", "microsoft office",
+  "english", "documentation", "physics", "biology", "chemistry",
+  "mathematics", "filing", "scheduling", "record keeping",
+
+  // too generic to be a learnable step
+  "software engineering", "full stack", "dashboard", "reporting",
+
+  // non-technical skills irrelevant to software jobs
+  "digital marketing", "social media", "content creation", "seo",
+  "branding", "copywriting", "email marketing", "campaign management",
+  "customer service", "sales", "retail", "cashier", "call center",
+  "phone etiquette", "hospitality", "food service", "bartending",
+  "housekeeping", "front desk", "tourism", "guest service",
+  "accounting", "bookkeeping", "payroll", "invoicing",
+  "teaching", "tutoring", "lesson planning", "classroom management",
+  "patient care", "caregiving", "first aid", "healthcare support",
+]);
+
+function filterSoftSkills(steps) {
+  return steps.filter(step => !SOFT_SKILLS_FRONTEND.has((step.learn || "").toLowerCase()));
+}
+
+function filterSoftSkillTags(skills) {
+  return skills.filter(s => !SOFT_SKILLS_FRONTEND.has((s || "").toLowerCase()));
+}
+
 function costToTime(skillCost) {
   if (skillCost <= 1.8)  return "~1–2 weeks";
   if (skillCost <= 2.5)  return "~3–4 weeks";
@@ -952,19 +969,11 @@ function costToTime(skillCost) {
   return "~9–12 months";
 }
 
-const SOFT_SKILLS_FRONTEND = new Set([
-  "communication", "teamwork", "attention to detail", "problem solving",
-  "leadership", "time management", "critical thinking", "adaptability",
-  "professionalism", "organization", "public speaking", "presentation",
-  "research", "writing", "github", "word", "microsoft office",
-]);
-
-function filterSoftSkills(steps) {
-  return steps.filter(step => !SOFT_SKILLS_FRONTEND.has((step.learn || "").toLowerCase()));
-}
-
-function filterSoftSkillTags(skills) {
-  return skills.filter(s => !SOFT_SKILLS_FRONTEND.has((s || "").toLowerCase()));
+function isSoftwareJob(jobTitle) {
+  const techTerms = ["developer", "engineer", "software", "backend", "frontend",
+                     "data", "devops", "cloud", "web", "fullstack", "full stack", "programmer"];
+  const title = (jobTitle || "").toLowerCase();
+  return techTerms.some(term => title.includes(term));
 }
 
 
@@ -992,15 +1001,16 @@ async function runGuidance(jobId){
       return;
     }
 
-    const rawPath          = data.path || [];
-    const rawMissing       = data.missing_skills || [];
-    const alternativePaths = (data.alternative_paths || []).filter(a => !SOFT_SKILLS_FRONTEND.has((a.first_skill||"").toLowerCase()));
-    const pathsExplored    = data.paths_explored || 0;
-    const chosenCost       = data.chosen_path_cost || 0;
+    const rawPath    = data.path || [];
+    const rawMissing = data.missing_skills || [];
 
-    // Filter soft skills out of both lists
-    const path         = filterSoftSkills(rawPath);
-    const missingSkills = filterSoftSkillTags(rawMissing);
+    const pathsExplored = data.explored_combinations || data.paths_explored || data.explored_paths || 0;
+
+    const isTechJob     = isSoftwareJob(data.job?.title);
+    const path          = isTechJob ? filterSoftSkills(rawPath)       : rawPath;
+    const missingSkills = isTechJob ? filterSoftSkillTags(rawMissing) : rawMissing;
+
+    const sortedPath = [...path].sort((a, b) => (b.improvement || 0) - (a.improvement || 0));
 
     panel.innerHTML = `
       <h3>${escapeHTML(data.job?.title || "Career Roadmap")}</h3>
@@ -1008,7 +1018,7 @@ async function runGuidance(jobId){
       <div class="score-row">
         <span class="score-pill">Start ${Math.round(data.start_score || 0)}%</span>
         <span class="score-pill">Final ${Math.round(data.final_score || 0)}%</span>
-        <span class="score-pill">${data.reached_target ? "✓ Target Reached" : "Keep Improving"}</span>
+        <span class="score-pill">${data.reached_target ? "Target Reached" : "Keep Improving"}</span>
       </div>
 
       ${pathsExplored > 0 ? `
@@ -1035,55 +1045,52 @@ async function runGuidance(jobId){
         }
       </div>
 
-      <h3 class="sub" style="margin-top:1.5rem">✅ Chosen Learning Path</h3>
+      <h3 class="sub" style="margin-top:1.5rem">Skill Progression Roadmap</h3>
       <p style="font-size:0.8rem;color:var(--text-muted,#8899a6);margin:-0.4rem 0 0.8rem">
-        Optimal route selected from ${pathsExplored} explored combinations
+        ${pathsExplored > 0 ? `Optimal route selected from ${pathsExplored} explored combinations — ordered by lowest learning cost` : "Optimal route selected by Dijkstra algorithm"}
       </p>
 
       <div class="pref-list">
-        ${
-          path.length
-          ? path.map((step, i) => `
-            <div class="pref" style="border-left: 2px solid #2dc4b3; padding-left: 0.75rem;">
+        ${(() => {
+          if (!sortedPath.length) return `<p class="muted">No roadmap steps found.</p>`;
+          let runningScore = Math.round(data.start_score || 0);
+          const maxImprovement = Math.max(...sortedPath.map(s => s.improvement || 0));
+          return sortedPath.map((step, i) => {
+            const isFirst = i === 0;
+            runningScore += Math.round(step.improvement || 0);
+            const barWidth = maxImprovement > 0
+              ? Math.round((step.improvement / maxImprovement) * 100)
+              : 100;
+            return `
+            <div class="pref" style="
+              border-left: 3px solid ${isFirst ? '#2dc4b3' : '#1a8a7a'};
+              padding-left: 0.75rem;
+              opacity: ${Math.max(0.6, 1 - i * 0.08)};
+              max-width: 100%;
+              box-sizing: border-box;
+            ">
               <span class="dot dot-1"></span>
-              <div>
-                <p><strong>Step ${i + 1}:</strong> Learn ${escapeHTML(step.learn)}</p>
-                <small>
-                  +${Math.round(step.improvement || 0)}% match improvement
-                  &nbsp;·&nbsp; Score after: ${Math.round(step.score || 0)}%
-                  &nbsp;·&nbsp; ⏱ ${costToTime(step.step_cost || 0)}
+              <div style="width:100%">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <p style="margin:0"><strong>Step ${i + 1}:</strong> Learn ${escapeHTML(step.learn)}</p>
+                  <span style="
+                    font-size:0.78rem;font-weight:700;color:#2dc4b3;
+                    background:rgba(45,196,179,0.1);padding:2px 8px;
+                    border-radius:12px;white-space:nowrap;margin-left:0.5rem;
+                  ">+${Math.round(step.improvement || 0)}%</span>
+                </div>
+                <div style="height:4px;background:rgba(45,196,179,0.15);border-radius:2px;margin:6px 0 4px;">
+                  <div style="height:4px;width:${barWidth}%;background:linear-gradient(90deg,#2dc4b3,#1ea899);border-radius:2px;"></div>
+                </div>
+                <small style="color:var(--text-muted,#8899a6)">
+                  Score after: ${runningScore}%
+                  ${isFirst ? '&nbsp;·&nbsp;<span style="color:#2dc4b3">Start here — lowest cost, highest efficiency</span>' : ''}
                 </small>
               </div>
             </div>
-          `).join("")
-          : `<p class="muted">No roadmap steps found.</p>`
-        }
+          `}).join("");
+        })()}
       </div>
-
-      ${alternativePaths.length ? `
-        <h3 class="sub" style="margin-top:1.5rem">❌ Paths Not Chosen</h3>
-        <p style="font-size:0.8rem;color:var(--text-muted,#8899a6);margin:-0.4rem 0 0.8rem">
-          These routes were explored but were less efficient
-        </p>
-        <div class="pref-list">
-          ${alternativePaths.map(alt => `
-            <div class="pref" style="border-left:2px solid #e74c3c;padding-left:0.75rem;opacity:0.7;">
-              <span class="dot" style="background:#e74c3c;width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:0.5rem;flex-shrink:0"></span>
-              <div>
-                <p style="text-decoration:line-through;color:var(--text-muted,#8899a6)">
-                  Start with: ${escapeHTML(alt.first_skill)}
-                </p>
-                <small>
-                  ⏱ ${costToTime(alt.cost || 0)}
-                  &nbsp;·&nbsp; Score after: ${alt.score_after || 0}%
-                  &nbsp;·&nbsp; +${alt.improvement || 0}% improvement
-                  &nbsp;·&nbsp; ${escapeHTML(alt.reason_rejected || "Not optimal")}
-                </small>
-              </div>
-            </div>
-          `).join("")}
-        </div>
-      ` : ""}
 
       <button class="btn primary-btn" style="margin-top:1.5rem" onclick="loadCourses(${jobId})">
         Find Courses

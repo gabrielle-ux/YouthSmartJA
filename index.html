@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>YouthSmartJA — AI Career Guidance Dashboard</title>
+  <meta name="description" content="AI-powered career guidance platform for Jamaican youth."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+
+<body>
+
+<nav class="navbar">
+  <span class="brand">YouthSmartJA</span>
+
+  <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+
+  <div class="nav-links">
+    <a href="#home">Home</a>
+    <a href="#features">Features</a>
+    <a href="#how">How It Works</a>
+    <a href="#auth">Login/Register</a>
+    <a href="#dashboard">Dashboard</a>
+  </div>
+</nav>
+
+<section id="home" class="hero gradient-hero">
+  <div class="hero-bg"></div>
+
+  <div class="hero-inner reveal">
+    <span class="chip">AI Career Guidance for Jamaican Youth</span>
+
+    <h1>
+      Build Your Career With
+      <span class="text-gradient">YouthSmartJA</span>
+    </h1>
+
+    <p class="lede">
+      Upload your resume, get matched with real jobs, discover missing skills,
+      and follow a personalized roadmap toward better opportunities.
+    </p>
+
+    <div class="hero-actions">
+      <a href="#auth" class="btn primary-btn">Get Started</a>
+      <a href="#features" class="btn ghost-btn">Explore Features</a>
+    </div>
+  </div>
+
+  <div class="dashboard-preview reveal">
+    <div class="preview-card">
+      <span>Match Score</span>
+      <h3 class="text-gradient">84%</h3>
+      <p>Software Intern</p>
+    </div>
+
+    <div class="preview-card">
+      <span>Missing Skills</span>
+      <p>Python APIs · SQL · Machine Learning</p>
+    </div>
+
+    <div class="preview-card">
+      <span>Roadmap</span>
+      <p>Learn backend → improve resume → unlock stronger matches</p>
+    </div>
+  </div>
+
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+</section>
+
+<section id="features" class="slide">
+  <h2>Platform Features</h2>
+
+  <p class="muted lede-sm">
+    YouthSmartJA is an AI-powered job matching and career guidance dashboard
+    that helps students move from resume upload to skill growth.
+  </p>
+
+  <div class="grid grid-3">
+    <div class="feature reveal">
+      <div class="icon-pill">📄</div>
+      <h3>Resume Upload</h3>
+      <p>Students upload a resume before accessing personalized matches.</p>
+    </div>
+
+    <div class="feature reveal">
+      <div class="icon-pill">🧠</div>
+      <h3>NLP Processing</h3>
+      <p>The system extracts keywords, skills, and useful resume signals.</p>
+    </div>
+
+    <div class="feature reveal">
+      <div class="icon-pill">🎯</div>
+      <h3>Cosine Matching</h3>
+      <p>Jobs are scored based on similarity between resume text and job requirements.</p>
+    </div>
+
+    <div class="feature reveal">
+      <div class="icon-pill">⚙️</div>
+      <h3>Preference Scoring</h3>
+      <p>Job type, location, and user preferences affect the final job feed.</p>
+    </div>
+
+    <div class="feature reveal">
+      <div class="icon-pill">🛣️</div>
+      <h3>Guidance Mode</h3>
+      <p>Dijkstra-style pathing identifies the best missing skills to learn next.</p>
+    </div>
+
+    <div class="feature reveal">
+      <div class="icon-pill">🔖</div>
+      <h3>Bookmarks</h3>
+      <p>Students can save jobs and return to them while tracking progress.</p>
+    </div>
+  </div>
+
+  <h3 class="sub">Technical Stack</h3>
+
+  <div class="stack">
+    <div class="tag"><span>Frontend</span><p>HTML · CSS · JavaScript</p></div>
+    <div class="tag"><span>Backend</span><p>Python · Flask API</p></div>
+    <div class="tag"><span>Database</span><p>MySQL</p></div>
+    <div class="tag"><span>AI/NLP</span><p>TF-IDF · Cosine Similarity · Dijkstra</p></div>
+  </div>
+</section>
+
+<section id="how" class="slide gradient-hero">
+  <h2>How YouthSmartJA Works</h2>
+
+  <div class="grid grid-2 align-start">
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-head">
+          <span class="step-num">01</span>
+          <h3>Create Profile</h3>
+        </div>
+        <p>Students sign up, select preferences, and prepare their profile.</p>
+      </div>
+
+      <div class="step reveal">
+        <div class="step-head">
+          <span class="step-num">02</span>
+          <h3>Upload Resume</h3>
+        </div>
+        <p>Resume processing extracts skill tags and prepares text for matching.</p>
+      </div>
+
+      <div class="step reveal">
+        <div class="step-head">
+          <span class="step-num">03</span>
+          <h3>Generate Scores</h3>
+        </div>
+        <p>Each job gets a match score, preference score, and final recommendation score.</p>
+      </div>
+
+      <div class="step reveal">
+        <div class="step-head">
+          <span class="step-num">04</span>
+          <h3>Run Guidance Mode</h3>
+        </div>
+        <p>The roadmap shows missing skills that can improve the student’s job match.</p>
+      </div>
+    </div>
+
+    <div class="diagram reveal">
+      <div class="diagram-node">📄 Resume Upload</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node">🧠 NLP Resume Processing</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node">🎯 Cosine Similarity Matching</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node">🧩 Skill Gap Detection</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node">🛣️ Dijkstra Learning Roadmap</div>
+      <div class="arrow">↓</div>
+      <div class="diagram-node accent">📊 Career Dashboard</div>
+    </div>
+  </div>
+</section>
+
+<section id="auth" class="slide">
+  <h2>Login or Create Account</h2>
+
+  <div class="auth-shell reveal">
+    <div class="auth-tabs">
+      <button class="auth-tab active" data-tab="login">Login</button>
+      <button class="auth-tab" data-tab="register">Register</button>
+    </div>
+
+    <form id="loginForm" class="auth-form active">
+      <input id="loginEmail" type="email" placeholder="Email" required>
+      <input id="loginPassword" type="password" placeholder="Password" required>
+      <button class="btn primary-btn" type="submit">Login</button>
+    </form>
+<form id="registerForm" class="auth-form">
+  <input id="registerName" type="text" placeholder="Full name" required>
+
+  <input id="registerEmail" type="email" placeholder="Email" required>
+
+  <input id="registerPassword" type="password" placeholder="Password" required>
+
+  <select id="registerRole">
+    <option value="student">Student</option>
+  </select>
+
+  <button class="btn primary-btn" type="submit">
+    Create Account
+  </button>
+</form>
+
+    <p id="authMessage" class="muted auth-message"></p>
+  </div>
+</section>
+
+<section id="dashboard" class="slide dashboard-section hidden">
+  <h2>Your Career Dashboard</h2>
+
+  <div class="dashboard-top">
+    <div>
+      <p class="muted">Logged in as</p>
+      <h3 id="currentUserName">Student</h3>
+    </div>
+
+    <button id="logoutBtn" class="btn ghost-btn">Logout</button>
+  </div>
+
+  <div class="dashboard-grid">
+    <div class="dash-card reveal">
+      <h3>Profile Setup</h3>
+      <p class="muted">Upload your resume to unlock job matches.</p>
+
+      <input id="resumeFile" type="file" accept=".pdf,.doc,.docx">
+      <button id="uploadResumeBtn" class="btn primary-btn">Upload Resume</button>
+
+      <p id="resumeStatus" class="muted small"></p>
+    </div>
+    
+    <div class="dash-card reveal">
+      <h3>Skill Tags</h3>
+
+      <div id="skillTags" class="tag-list">
+        <span class="tag">No resume uploaded yet</span>
+      </div>
+    </div>
+
+ <div class="dash-card reveal">
+  <h3>Preference Filtering</h3>
+
+  <input id="careerInterestPref" type="text" placeholder="Career Interest">
+
+  <select id="jobTypePref">
+    <option value="">Preferred Job Type</option>
+    <option value="Internship">Internship</option>
+    <option value="Part-time">Part-time</option>
+    <option value="Full-time">Full-time</option>
+    <option value="Freelance">Freelance</option>
+  </select>
+
+  <select id="workStylePref">
+    <option value="">Work Style</option>
+    <option value="Remote">Remote</option>
+    <option value="Hybrid">Hybrid</option>
+    <option value="On-site">On-site</option>
+  </select>
+
+  <select id="availabilityPref">
+    <option value="">Availability</option>
+    <option value="Weekends">Weekends</option>
+    <option value="Evenings">Evenings</option>
+    <option value="Summer">Summer</option>
+    <option value="Flexible">Flexible</option>
+  </select>
+
+
+  <button id="savePrefsBtn" class="btn ghost-btn">Save Preferences</button>
+</div>
+
+    <div class="dash-card reveal">
+      <h3>Search Jobs</h3>
+
+      <input id="jobSearchInput" type="text" placeholder="Search software, data, design...">
+      <button id="searchJobsBtn" class="btn primary-btn">Search Jobs</button>
+    </div>
+
+    <div class="dash-card wide reveal">
+      <h3>Matched Job Feed</h3>
+      <p class="muted">
+        Jobs are grouped by match and preference strength.
+      </p>
+
+      <div id="jobFeed" class="job-feed">
+        <p class="muted">Your matched jobs will appear here after resume upload.</p>
+      </div>
+    </div>
+
+    <div class="dash-card wide reveal">
+      <h3>Selected Job Guidance</h3>
+
+      <div id="guidancePanel">
+        <p class="muted">Select a job and run Guidance Mode.</p>
+      </div>
+    </div>
+
+    <div class="dash-card wide reveal">
+      <h3>Bookmarks</h3>
+
+      <div id="bookmarkList">
+        <p class="muted">Saved jobs will appear here.</p>
+      </div>
+    </div>
+
+    <div class="dash-card wide reveal">
+      <h3>API Log</h3>
+      <pre id="apiLog">Waiting for actions...</pre>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p class="text-gradient brand-lg">YouthSmartJA</p>
+  <p class="muted">AI Career Guidance Platform for Jamaican Youth</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
