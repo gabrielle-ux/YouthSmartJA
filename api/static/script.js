@@ -842,7 +842,7 @@ function renderJobs(jobs){
             Guidance Mode
           </button>
 
-          <button class="btn primary-btn" onclick="bookmarkJob(${jobId})">
+          <button class="bookmark-btn-${jobId} btn primary-btn" onclick="bookmarkJob(${jobId})">
             Bookmark
           </button>
         </div>
@@ -1224,6 +1224,14 @@ async function bookmarkJob(jobId){
 
     if(res.ok){
       showFlash("Job bookmarked successfully!");
+
+      const btn = document.getElementById(`bookmark-btn-${jobId}`);
+      if(btn) {
+        btn.innerText = "Saved";
+        btn.disabled = true;
+        btn.classList.add("ghost-btn");
+      }
+
       await loadBookmarks();
     }else{
       showFlash(data.msg || data.error || "Could not bookmark job.", "error");
@@ -1332,6 +1340,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (jobFeed) {
     // Only load these on the jobs page
     await loadMatches();
+  }
+
+  if (document.getElementById("bookmarkList")) {
     await loadBookmarks();
   }
 });
