@@ -338,13 +338,18 @@ def get_guidance_courses(job_id):
                 "missing_skills": skills,
                 "skills": skills
             },
-            timeout=60
+            timeout=120
         )
         
         n8n_response.raise_for_status()
         raw_data = n8n_response.json()
-        n8n_data = raw_data[0] if isinstance(raw_data, list) else raw_data
-
+        
+        if isinstance(raw_data, list) and len(raw_data) > 0:
+            n8n_data = raw_data[0]
+        elif isinstance(raw_data, dict):
+            n8n_data = raw_data
+        else:
+            n8n_data = {}
 
     except requests.RequestException as exc:
         return jsonify({

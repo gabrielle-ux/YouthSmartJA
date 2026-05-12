@@ -1144,30 +1144,15 @@ async function loadCourses(jobId){
 
     logApi("COURSES RESPONSE", data);
 
+    // 1. CHECK FOR ERROR FROM FLASK
+    if (!res.ok || data.ok === false) {
+      courseSection.innerHTML = `<p class="muted">Error: ${data.error || "Could not load courses."}</p>`;
+      return;
+    }
     // const courses = data.courses || data.recommendations || [];
 
     const courses = data.courses || [];
     const aiMessage = data.message || "Recommended courses for your path:";
-
-    // panel.innerHTML += `
-    //   <h3 class="sub">Recommended Courses</h3>
-
-    //   <div class="pref-list">
-    //     ${
-    //       courses.length
-    //       ? courses.map(course => `
-    //         <div class="pref">
-    //           <span class="dot dot-3"></span>
-    //           <div>
-    //             <p>${escapeHTML(course.title || course.name || "Course")}</p>
-    //             <small>${escapeHTML(course.platform || course.provider || "Kaggle / External")}</small>
-    //           </div>
-    //         </div>
-    //       `).join("")
-    //       : `<p class="muted">No course recommendations returned yet.</p>`
-    //     }
-    //   </div>
-    // `;
 
     // AI Agent response
     courseSection.innerHTML = `
@@ -1184,9 +1169,8 @@ async function loadCourses(jobId){
               <span class="dot dot-3"></span>
               <div>
                 <strong>${escapeHTML(course.name)}</strong>
-                <p class="small muted">${escapeHTML(course.guidance_note)}</p>
                 <a href="${course.link}" target="_blank" class="course-link">
-                   ${escapeHTML(course.phrase)}
+                  Here's the link!
                 </a>
               </div>
             </div>
