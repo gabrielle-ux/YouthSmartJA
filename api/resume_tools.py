@@ -13,10 +13,10 @@ load_dotenv()
 
 DB_CONFIG = {
     "host": "127.0.0.1",
-    "user": "captain",
-    "password": "captain123",
+    "user": "root",
+    "password": "Happy321",
     "database": "youthsmart",
-    "port": 3308,
+    "port": 3306,
 }
 
 ALLOWED_EXTENSIONS = {"pdf", "docx"}

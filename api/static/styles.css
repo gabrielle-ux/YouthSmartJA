@@ -847,6 +847,29 @@ footer{
     display: block;
 }
 
+/* 🔥 Fade in/out animation for YouthSmartJA text */
+.pulse-text {
+  display: inline-block;
+  animation: fadePulse 2.5s infinite ease-in-out;
+}
+
+@keyframes fadePulse {
+  0% {
+    opacity: 0.2;
+    transform: scale(0.98);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+
+  100% {
+    opacity: 0.2;
+    transform: scale(0.98);
+  }
+}
+
 /* Close button style */
 .close-btn {
     background: none;

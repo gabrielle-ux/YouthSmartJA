@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Job Details — YouthSmartJA</title>
+  <meta name="description" content="AI-powered career guidance platform for Jamaican youth."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"/>
+</head>
+
+<body>
+
+<nav class="navbar">
+  <span class="brand">YouthSmartJA</span>
+  <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/search">Find Jobs</a>
+  </div>
+</nav>
+
+<section id="job-detail-page" class="slide">
+  <h2>Job Details</h2>
+
+  <div class="dashboard-grid">
+
+    <!-- Back button -->
+    <div class="dash-card wide reveal" style="padding: 0.75rem 1.25rem;">
+      <a href="/search" class="btn ghost-btn" style="display:inline-flex;align-items:center;gap:0.4rem;">
+        ← Back to Jobs
+      </a>
+    </div>
+
+    <!-- Job Details Card -->
+    <div class="dash-card wide reveal" id="jobDetailCard">
+      <p class="muted">Loading job details...</p>
+    </div>
+
+    <!-- Guidance Mode Card -->
+    <div class="dash-card wide reveal" id="guidanceCard" style="display:none;">
+      <h3>Selected Job Guidance</h3>
+      <div id="guidancePanel">
+        <p class="muted">Generating your learning roadmap...</p>
+      </div>
+    </div>
+
+    <!-- API Log -->
+    <div class="dash-card wide reveal">
+      <h3>API Log</h3>
+      <pre id="apiLog">Waiting for actions...</pre>
+    </div>
+
+  </div>
+</section>
+
+<script src="{{ url_for('static', filename='script.js') }}" defer></script>
+
+<script>
+  // ===============================
+  // JOB DETAIL PAGE LOGIC
+  // ===============================
+
+  // Get job ID from URL — e.g. /jobs/458 → 458
+  const JOB_ID = parseInt(window.location.pathname.split("/").pop());
+
+  async function loadJobDetail(){
+    const card = document.getElementById("jobDetailCard");
+    if(!card || !JOB_ID) return;
+
+    const token = localStorage.getItem("ys_token");
+
+    try{
+      const res = await fetch(`http://127.0.0.1:5000/api/jobs/${JOB_ID}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+
+      const data = await res.json();
+      const job  = data.job || data;
+
+      if(!res.ok){
+        card.innerHTML = `<p class="muted">Could not load job details.</p>`;
+        return;
+      }
+
+      const applyLink = job.apply_link || job.url || job.link || "";
+
+      card.innerHTML = `
+        <!-- Job Header -->
+        <div style="border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:1.25rem;margin-bottom:1.5rem;">
+          <h3 style="margin:0 0 0.25rem;">${escapeHTML(job.title || "Job Details")}</h3>
+          <p class="muted" style="margin:0;">
+            ${escapeHTML(job.company || "Unknown Company")}
+            &nbsp;·&nbsp;
+            ${escapeHTML(job.city || job.country || "Jamaica")}
+            ${job.is_remote ? '&nbsp;·&nbsp;<span style="color:#2dc4b3;font-weight:600;">Remote</span>' : ""}
+          </p>
+          ${job.salary_min ? `
+            <p style="margin:0.5rem 0 0;font-size:0.85rem;color:#2dc4b3;font-weight:600;">
+              $${escapeHTML(String(job.salary_min))} – $${escapeHTML(String(job.salary_max))} / ${escapeHTML((job.salary_period || "").toLowerCase())}
+            </p>` : ""}
+        </div>
+
+        <!-- Required Skills -->
+        ${job.skills?.length ? `
+          <div style="margin-bottom:1.5rem;">
+            <p class="muted small" style="margin:0 0 0.5rem;">Required Skills</p>
+            <div class="tag-list">
+              ${job.skills.map(s => `<span class="tag">${escapeHTML(s)}</span>`).join("")}
+            </div>
+          </div>` : ""}
+
+        <!-- Education -->
+        ${job.degrees?.length ? `
+          <div style="margin-bottom:1.5rem;">
+            <p class="muted small" style="margin:0 0 0.5rem;">Education Requirements</p>
+            <div class="tag-list">
+              ${job.degrees.map(d => `<span class="tag">${escapeHTML(d)}</span>`).join("")}
+            </div>
+          </div>` : ""}
+
+        <!-- Certifications -->
+        ${job.certifications?.length ? `
+          <div style="margin-bottom:1.5rem;">
+            <p class="muted small" style="margin:0 0 0.5rem;">Certifications</p>
+            <div class="tag-list">
+              ${job.certifications.map(c => `<span class="tag">${escapeHTML(c)}</span>`).join("")}
+            </div>
+          </div>` : ""}
+
+        <!-- Full Description -->
+        <div style="margin-bottom:2rem;">
+          <p class="muted small" style="margin:0 0 0.75rem;">About This Role</p>
+          <div style="
+            font-size:0.88rem;
+            line-height:1.8;
+            color:var(--text-muted,#8899a6);
+            white-space:pre-line;
+          ">${escapeHTML(job.description || "No description available.")}</div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="job-actions">
+          ${applyLink ? `
+            <a href="${escapeHTML(applyLink)}" target="_blank" class="btn primary-btn">
+              Apply Now
+            </a>` : ""}
+          <button class="btn ghost-btn" onclick="openGuidance()">
+            Guidance Mode
+          </button>
+          <button class="btn primary-btn" onclick="bookmarkJob(${JOB_ID})">
+            Bookmark
+          </button>
+        </div>
+      `;
+
+    }catch(err){
+      card.innerHTML = `<p class="muted">Could not connect to backend.</p>`;
+    }
+  }
+
+  function openGuidance(){
+    const guidanceCard = document.getElementById("guidanceCard");
+    if(guidanceCard){
+      guidanceCard.style.display = "block";
+      guidanceCard.scrollIntoView({ behavior:"smooth" });
+    }
+    runGuidance(JOB_ID);
+  }
+
+  // Run on page load
+  window.addEventListener("DOMContentLoaded", () => {
+    const token = localStorage.getItem("ys_token");
+
+    // Redirect to login if not authenticated
+    if(!token){
+      window.location.href = "/register";
+      return;
+    }
+
+    loadJobDetail();
+  });
+</script>
+
+</body>
+</html>
