@@ -102,6 +102,11 @@ def allowed_file(filename: str) -> bool:
 def home():
     return render_template('index.html')
 
+
+@app.route('/jobs/<int:job_id>')
+def job_detail_page(job_id):
+    return render_template('job_detail.html', job_id=job_id)
+
 @app.route('/features')
 def features():
     return render_template('features.html')

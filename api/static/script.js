@@ -695,7 +695,7 @@ function renderJobs(jobs){
         </p>
         <div class="job-actions">
           ${jobLink ? `<a href="${escapeHTML(jobLink)}" target="_blank" class="btn primary-btn">Apply Now</a>` : ""}
-          <button class="btn ghost-btn"   onclick="viewJobDetails(${jobId})">View Details</button>
+          <a href="/jobs/${jobId}" class="btn ghost-btn">View Details</a>
           <button class="btn ghost-btn"   onclick="runGuidance(${jobId})">Guidance Mode</button>
           <button class="btn primary-btn" onclick="bookmarkJob(${jobId})">Bookmark</button>
         </div>
