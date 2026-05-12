@@ -1115,24 +1115,53 @@ async function loadCourses(jobId){
 
     logApi("COURSES RESPONSE", data);
 
-    const courses = data.courses || data.recommendations || [];
+    // const courses = data.courses || data.recommendations || [];
 
-    panel.innerHTML += `
-      <h3 class="sub">Recommended Courses</h3>
+    const courses = data.courses || [];
+    const aiMessage = data.message || "Recommended courses for your path:";
 
-      <div class="pref-list">
+    // panel.innerHTML += `
+    //   <h3 class="sub">Recommended Courses</h3>
+
+    //   <div class="pref-list">
+    //     ${
+    //       courses.length
+    //       ? courses.map(course => `
+    //         <div class="pref">
+    //           <span class="dot dot-3"></span>
+    //           <div>
+    //             <p>${escapeHTML(course.title || course.name || "Course")}</p>
+    //             <small>${escapeHTML(course.platform || course.provider || "Kaggle / External")}</small>
+    //           </div>
+    //         </div>
+    //       `).join("")
+    //       : `<p class="muted">No course recommendations returned yet.</p>`
+    //     }
+    //   </div>
+    // `;
+
+    // AI Agent response
+    panel.innerHTML = `
+      <div class="ai-guidance-intro">
+        <p class="lede-sm">${escapeHTML(aiMessage)}</p>
+      </div>
+      <h3 class="sub">Learning Path</h3>
+      <div class="course-grid">
         ${
           courses.length
           ? courses.map(course => `
             <div class="pref">
               <span class="dot dot-3"></span>
               <div>
-                <p>${escapeHTML(course.title || course.name || "Course")}</p>
-                <small>${escapeHTML(course.platform || course.provider || "Kaggle / External")}</small>
+                <strong>${escapeHTML(course.name)}</strong>
+                <p class="small muted">${escapeHTML(course.guidance_note)}</p>
+                <a href="${course.link}" target="_blank" class="course-link">
+                   ${escapeHTML(course.phrase)}
+                </a>
               </div>
             </div>
           `).join("")
-          : `<p class="muted">No course recommendations returned yet.</p>`
+          : `<p class="muted">No specific courses found for these skills.</p>`
         }
       </div>
     `;

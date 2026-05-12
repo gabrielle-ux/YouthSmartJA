@@ -280,7 +280,6 @@ def get_skill_path(job_id):
         job_id=job_id,
         target_score=target_score
     )
-
     return jsonify({
         "ok": True,
         "result": result,
@@ -339,7 +338,9 @@ def get_guidance_courses(job_id):
         )
         
         n8n_response.raise_for_status()
-        n8n_data = n8n_response.json()
+        raw_data = n8n_response.json()
+        n8n_data = raw_data[0] if isinstance(raw_data, list) else raw_data
+
 
     except requests.RequestException as exc:
         return jsonify({
@@ -357,12 +358,18 @@ def get_guidance_courses(job_id):
         or []
     )
 
+    # return jsonify({
+    #     "ok": True,
+    #     "skill_path": skill_path_result,
+    #     "missing_skills": skills,
+    #     "courses": courses,
+    #     "n8n": n8n_data
+    
     return jsonify({
         "ok": True,
-        "skill_path": skill_path_result,
-        "missing_skills": skills,
-        "courses": courses,
-        "n8n": n8n_data
+        "message": n8n_data.get("message", "Here are some courses to help you grow."),
+        "courses": n8n_data.get("courses", []),
+        "skill_path": skill_path_result
     })
 
 

@@ -28,10 +28,10 @@ log = logging.getLogger(__name__)
 
 DB_CONFIG = {
     "host": "127.0.0.1",
-    "user": "root",
-    "password": "Happy321",
+    "user": "captain",
+    "password": "captain123",
     "database": "youthsmart",
-    "port": 3306,
+    "port": 3308,
     "pool_name": "ysja_pool",
     "pool_size": 5,
 }

@@ -21,7 +21,7 @@ DB_CONFIG = {
     "user": os.getenv("DB_USER", "captain"),
     "password": os.getenv("DB_PASSWORD", "captain123"),
     "database": os.getenv("DB_NAME", "youthsmart"),
-    "port": int(os.getenv("DB_PORT", 3306)),
+    "port": int(os.getenv("DB_PORT", 3308)),
 }
 
 JAMAICAN_PARISHES = {
