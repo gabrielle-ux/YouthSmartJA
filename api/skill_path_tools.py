@@ -3,6 +3,7 @@
 import os
 import heapq
 import logging
+import math
 
 from dotenv import load_dotenv
 from mysql.connector.pooling import MySQLConnectionPool
@@ -13,6 +14,8 @@ from cosine_matcher import (
     clean_text,
     get_latest_resume_text,
     get_job_text_by_id,
+    extract_top_keywords,
+    keyword_cosine,
 )
 
 load_dotenv()
@@ -74,91 +77,87 @@ SKILL_ALIASES: dict[str, str] = {
 
 # ---------------------------------------------------------------------------
 # Skill context expansion
-# Richer context per skill so TF-IDF gives a stronger signal
-# when a skill is added to the simulated resume.
 # ---------------------------------------------------------------------------
 
 SKILL_CONTEXT: dict[str, str] = {
-    # Office / admin
-    "excel":              "excel spreadsheet data analysis microsoft office formulas pivot tables",
-    "word":               "word document microsoft office writing reports formatting letters",
-    "microsoft office":   "microsoft office excel word powerpoint outlook productivity",
-    "administration":     "administration office management coordination operations support clerical",
-    "organization":       "organization planning coordination management workflow scheduling",
-    "database":           "database sql data management queries records storage retrieval",
-    "accounting":         "accounting finance bookkeeping ledger payroll invoicing",
+    "excel": "excel spreadsheet data analysis microsoft office formulas pivot tables",
+    "word": "word document microsoft office writing reports formatting letters",
+    "microsoft office": "microsoft office excel word powerpoint outlook productivity",
+    "administration": "administration office management coordination operations support clerical",
+    "organization": "organization planning coordination management workflow scheduling",
+    "database": "database sql data management queries records storage retrieval",
+    "accounting": "accounting finance bookkeeping ledger payroll invoicing",
     "financial analysis": "financial analysis finance reporting budgeting forecasting",
-    "customer service":   "customer service support communication client relations helpdesk",
+    "customer service": "customer service support communication client relations helpdesk",
     "project management": "project management planning coordination delivery agile scrum",
-    "public speaking":    "public speaking presentation communication leadership training",
-    "communication":      "communication writing presentation teamwork collaboration interpersonal",
-    "leadership":         "leadership management team coordination decision making strategy",
-    "teamwork":           "teamwork collaboration group work coordination support",
-    "problem solving":    "problem solving analytical thinking troubleshooting critical solutions",
-    "critical thinking":  "critical thinking analysis evaluation reasoning problem solving",
-    "time management":    "time management scheduling prioritization productivity efficiency",
+    "public speaking": "public speaking presentation communication leadership training",
+    "communication": "communication writing presentation teamwork collaboration interpersonal",
+    "leadership": "leadership management team coordination decision making strategy",
+    "teamwork": "teamwork collaboration group work coordination support",
+    "problem solving": "problem solving analytical thinking troubleshooting critical solutions",
+    "critical thinking": "critical thinking analysis evaluation reasoning problem solving",
+    "time management": "time management scheduling prioritization productivity efficiency",
     "attention to detail": "attention to detail accuracy quality review verification",
-    # Tech
-    "python":             "python programming scripting automation development data backend",
-    "java":               "java programming backend spring enterprise development jvm",
-    "javascript":         "javascript frontend web development node react programming browser",
-    "typescript":         "typescript javascript frontend development static typing angular",
-    "react":              "react javascript frontend ui component web development spa",
-    "vue":                "vue javascript frontend ui component web development spa",
-    "angular":            "angular typescript frontend ui component web development spa",
-    "node":               "node javascript backend server api development runtime express",
-    "sql":                "sql database queries data management relational records joins",
-    "mysql":              "mysql sql database relational queries data management backend",
-    "postgresql":         "postgresql sql database relational queries data management backend",
-    "mongodb":            "mongodb nosql database document storage queries backend",
-    "docker":             "docker containerization deployment devops infrastructure backend",
-    "kubernetes":         "kubernetes container orchestration deployment devops infrastructure backend",
-    "aws":                "aws cloud computing infrastructure deployment services backend",
-    "azure":              "azure cloud computing microsoft infrastructure deployment backend",
-    "gcp":                "gcp google cloud computing infrastructure deployment backend",
-    "git":                "git version control source code management collaboration backend developer repository branching",
-    "linux":              "linux operating system server administration command line backend",
-    "machine learning":   "machine learning ai data science models training algorithms python",
-    "deep learning":      "deep learning neural networks ai computer vision nlp python",
-    "ai":                 "artificial intelligence machine learning data models automation python",
-    "nlp":                "nlp natural language processing text analysis machine learning python",
-    "data analysis":      "data analysis statistics visualization insights reporting excel",
-    "statistics":         "statistics data analysis probability modelling research python r",
-    "rest":               "rest api web services http integration backend endpoints json",
-    "rest api":           "rest api web services http integration backend endpoints json",
-    "api":                "api rest web services http integration backend endpoints developer",
-    "graphql":            "graphql api query language backend integration developer",
-    "flask":              "flask python web framework backend api development rest",
-    "django":             "django python web framework backend development rest",
-    "fastapi":            "fastapi python web framework backend api development rest",
-    "spring":             "spring java framework backend enterprise development rest api",
-    "spring boot":        "spring boot java framework backend microservices development rest",
-    "backend":            "backend server api development database rest java python node developer",
-    "frontend":           "frontend ui ux web development javascript react vue html css developer",
-    "full stack":         "full stack frontend backend developer javascript python api database web",
-    "microservices":      "microservices architecture backend distributed systems api docker kubernetes",
-    "terraform":          "terraform infrastructure as code devops cloud deployment aws",
-    "redis":              "redis cache in-memory database performance backend api",
-    "elasticsearch":      "elasticsearch search engine data indexing backend api",
-    "tableau":            "tableau data visualization business intelligence reporting dashboard",
-    "power bi":           "power bi data visualization business intelligence reporting dashboard",
-    "c++":                "c++ systems programming performance backend development low level",
-    "c#":                 "c# dotnet microsoft backend development enterprise api",
-    "swift":              "swift ios mobile apple development programming xcode",
-    "kotlin":             "kotlin android mobile development programming jvm backend",
-    "go":                 "go golang backend systems programming performance api",
-    "r":                  "r statistics data analysis programming research modelling",
-    "computer vision":    "computer vision image processing deep learning ai detection python",
-    "image processing":   "image processing computer vision python ai analysis detection",
+
+    "python": "python programming scripting automation development data backend",
+    "java": "java programming backend spring enterprise development jvm",
+    "javascript": "javascript frontend web development node react programming browser",
+    "typescript": "typescript javascript frontend development static typing angular",
+    "react": "react javascript frontend ui component web development spa",
+    "vue": "vue javascript frontend ui component web development spa",
+    "angular": "angular typescript frontend ui component web development spa",
+    "node": "node javascript backend server api development runtime express",
+    "sql": "sql database queries data management relational records joins",
+    "mysql": "mysql sql database relational queries data management backend",
+    "postgresql": "postgresql sql database relational queries data management backend",
+    "mongodb": "mongodb nosql database document storage queries backend",
+    "docker": "docker containerization deployment devops infrastructure backend",
+    "kubernetes": "kubernetes container orchestration deployment devops infrastructure backend",
+    "aws": "aws cloud computing infrastructure deployment services backend",
+    "azure": "azure cloud computing microsoft infrastructure deployment backend",
+    "gcp": "gcp google cloud computing infrastructure deployment backend",
+    "git": "git version control source code management collaboration backend developer repository branching",
+    "linux": "linux operating system server administration command line backend",
+    "machine learning": "machine learning ai data science models training algorithms python",
+    "deep learning": "deep learning neural networks ai computer vision nlp python",
+    "ai": "artificial intelligence machine learning data models automation python",
+    "nlp": "nlp natural language processing text analysis machine learning python",
+    "data analysis": "data analysis statistics visualization insights reporting excel",
+    "statistics": "statistics data analysis probability modelling research python r",
+    "rest": "rest api web services http integration backend endpoints json",
+    "rest api": "rest api web services http integration backend endpoints json",
+    "api": "api rest web services http integration backend endpoints developer",
+    "graphql": "graphql api query language backend integration developer",
+    "flask": "flask python web framework backend api development rest",
+    "django": "django python web framework backend development rest",
+    "fastapi": "fastapi python web framework backend api development rest",
+    "spring": "spring java framework backend enterprise development rest api",
+    "spring boot": "spring boot java framework backend microservices development rest",
+    "backend": "backend server api development database rest java python node developer",
+    "frontend": "frontend ui ux web development javascript react vue html css developer",
+    "full stack": "full stack frontend backend developer javascript python api database web",
+    "microservices": "microservices architecture backend distributed systems api docker kubernetes",
+    "terraform": "terraform infrastructure as code devops cloud deployment aws",
+    "redis": "redis cache in-memory database performance backend api",
+    "elasticsearch": "elasticsearch search engine data indexing backend api",
+    "tableau": "tableau data visualization business intelligence reporting dashboard",
+    "power bi": "power bi data visualization business intelligence reporting dashboard",
+    "c++": "c++ systems programming performance backend development low level",
+    "c#": "c# dotnet microsoft backend development enterprise api",
+    "swift": "swift ios mobile apple development programming xcode",
+    "kotlin": "kotlin android mobile development programming jvm backend",
+    "go": "go golang backend systems programming performance api",
+    "r": "r statistics data analysis programming research modelling",
+    "computer vision": "computer vision image processing deep learning ai detection python",
+    "image processing": "image processing computer vision python ai analysis detection",
     "software engineering": "software engineering development backend frontend java python api",
-    "database design":    "database design sql schema modelling relational queries backend",
+    "database design": "database design sql schema modelling relational queries backend",
     "data visualization": "data visualization charts graphs reporting tableau power bi excel",
-    "grpc":               "grpc api protocol backend microservices distributed systems",
+    "grpc": "grpc api protocol backend microservices distributed systems",
 }
 
 
 def _expand_skill(skill: str) -> str:
-    """Return a rich context string for a skill to boost TF-IDF signal."""
     return SKILL_CONTEXT.get(skill, f"{skill} project experience work professional developer")
 
 
@@ -227,7 +226,7 @@ TECHNICAL_SKILLS: set[str] = {
 
 SOFT_SKILLS: set[str] = {
     "communication", "teamwork", "leadership",
-    "problem solving", "critical thinking",
+    "problem solving", "critical thinking", "dashboard"
     "time management", "attention to detail",
     "organization", "adaptability", "professionalism",
 }
@@ -247,12 +246,15 @@ SOFTWARE_CONTEXT_TERMS: set[str] = {
 
 # ---------------------------------------------------------------------------
 # Blended score weights
-# 70% cosine similarity + 30% skill coverage
-# Skill coverage = what % of the job's required skills this skillset covers.
-# This gives meaningful per-step jumps even when TF-IDF signal is weak.
 # ---------------------------------------------------------------------------
-COSINE_WEIGHT = 0.70
-COVERAGE_WEIGHT = 0.30
+
+COSINE_WEIGHT = 0.65
+COVERAGE_WEIGHT = 0.35
+
+MAX_EFFECTIVE_SKILLS_FOR_COVERAGE = 6
+
+DISPLAY_IMPROVEMENT_MULTIPLIER = 2.5
+MIN_DISPLAY_IMPROVEMENT = 3
 
 # ---------------------------------------------------------------------------
 # Dynamic loading from DB
@@ -345,7 +347,6 @@ PREREQUISITES: dict[str, set[str]] = {
     "node": {"javascript"},
     "kubernetes": {"docker"},
     "terraform": {"aws"},
-    "graphql": {"rest"},
     "postgresql": {"sql"},
     "mysql": {"sql"},
     "mongodb": {"sql"},
@@ -354,11 +355,51 @@ PREREQUISITES: dict[str, set[str]] = {
 # ---------------------------------------------------------------------------
 # Speed / quality controls
 # ---------------------------------------------------------------------------
-BEAM_WIDTH = 4
-SKILL_LEARN_REPEAT = 15
-MIN_IMPROVEMENT_THRESHOLD = 0.005
-MAX_SKILLS_TO_TEST = 15
-MAX_TARGET_GAIN = 0.30
+
+BEAM_WIDTH = 8
+SKILL_LEARN_REPEAT = 40
+MIN_IMPROVEMENT_THRESHOLD = 0.0001
+MAX_SKILLS_TO_TEST = 35
+
+# Forces the roadmap to show multiple useful skills instead of stopping early.
+MIN_ROADMAP_STEPS = 4
+MAX_ROADMAP_STEPS = 5
+
+# ---------------------------------------------------------------------------
+# Per-skill repeat counts
+# ---------------------------------------------------------------------------
+
+SKILL_IMPORTANCE: dict[str, int] = {
+    "python": 42, "javascript": 42, "java": 38, "typescript": 38,
+    "c++": 25, "c#": 25, "go": 25, "kotlin": 22, "swift": 22,
+    "ruby": 20, "r": 18,
+    "react": 38, "angular": 36, "vue": 34, "node": 36,
+    "html": 12, "css": 12,
+    "flask": 36, "django": 36, "fastapi": 34,
+    "spring": 36, "spring boot": 38,
+    "rest api": 32, "rest": 30, "api": 28, "graphql": 32, "grpc": 20,
+    "sql": 32, "mysql": 30, "postgresql": 32, "mongodb": 30,
+    "redis": 18, "elasticsearch": 18, "database": 16, "database design": 18,
+    "aws": 38, "azure": 38, "gcp": 36, "docker": 36, "kubernetes": 40,
+    "terraform": 22, "linux": 18, "git": 12,
+    "ci cd": 20, "devops": 22, "jenkins": 18, "github actions": 16,
+    "machine learning": 40, "deep learning": 42, "ai": 36,
+    "nlp": 26, "computer vision": 26, "image processing": 22,
+    "data analysis": 20, "statistics": 20,
+    "pandas": 18, "numpy": 16, "scikit learn": 22,
+    "tensorflow": 26, "pytorch": 26,
+    "spark": 22, "airflow": 20, "bigquery": 18, "snowflake": 18,
+    "dbt": 16, "etl": 18, "data pipeline": 20, "data engineering": 22,
+    "llm": 24, "generative ai": 22, "prompt engineering": 16,
+    "cybersecurity": 24, "iam": 22, "active directory": 18,
+    "okta": 16, "sso": 14, "saml": 16, "oauth": 18,
+    "zero trust": 20, "siem": 20, "penetration testing": 24,
+    "excel": 10, "tableau": 12, "power bi": 12,
+    "data visualization": 12, "microsoft office": 8,
+    "communication": 6, "teamwork": 6, "leadership": 8,
+    "problem solving": 8, "project management": 10,
+    "customer service": 6, "accounting": 10, "financial analysis": 12,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -387,6 +428,7 @@ def is_software_context(job_text: str) -> bool:
 def filter_candidate_skills_for_context(candidate_skills: list[str], job_text: str) -> list[str]:
     if not is_software_context(job_text):
         return candidate_skills
+
     return [
         skill for skill in candidate_skills
         if skill not in IRRELEVANT_SOFTWARE_SKILLS
@@ -414,14 +456,8 @@ def compute_edge_weight(skill: str, improvement: float, job_text: str = "") -> f
 
     difficulty = SKILL_COST.get(skill, 2.5)
     priority = get_skill_priority(skill, job_text)
-    weight = (difficulty * priority) / (improvement + 1e-6)
 
-    # Hard cap — anything above 200 means the skill barely helps this job.
-    # Prevents soft skills with tiny improvement from getting huge cost numbers.
-    if weight > 200:
-        return None
-
-    return weight
+    return (difficulty * priority) / (improvement + 1e-6)
 
 
 # ---------------------------------------------------------------------------
@@ -483,52 +519,73 @@ class _PathScorer:
         self.job_clean = clean_text(job_text)
         self.skills = list(candidate_skills)
 
-        # Total job skills used for coverage calculation.
-        # Includes skills the user already has so coverage reflects the full picture.
-        self.total_job_skills = len(all_job_skills) if all_job_skills else 1
-        self.already_have_count = len(already_have)
+        raw_total_job_skills = len(all_job_skills) if all_job_skills else 1
 
-        # Build superset doc using expanded skill context so the vectorizer
-        # vocabulary includes all relevant terms from the start.
-        expanded_skills = " ".join(_expand_skill(s) for s in candidate_skills)
-        superset_doc = (self.resume_clean + " " + expanded_skills).strip()
-        corpus = [superset_doc, self.job_clean]
-
-        # Bigrams + higher max_features for richer matching signal.
-        self.vectorizer = TfidfVectorizer(
-            stop_words="english",
-            ngram_range=(1, 2),
-            max_features=3000,
+        self.total_job_skills = max(
+            len(already_have) + 1,
+            min(raw_total_job_skills, MAX_EFFECTIVE_SKILLS_FOR_COVERAGE),
         )
+        self.already_have_count = min(len(already_have), self.total_job_skills)
 
-        self.vectorizer.fit(corpus)
-        self.job_vec = self.vectorizer.transform([self.job_clean])
+        self.job_keywords = extract_top_keywords(self.job_clean, top_n=50)
+        self.base_resume_keywords = extract_top_keywords(self.resume_clean, top_n=50)
+
+        try:
+            self._vec = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
+            all_skill_contexts = " ".join(_expand_skill(s) for s in candidate_skills)
+
+            self._vec.fit([
+                self.base_resume_keywords,
+                self.job_keywords,
+                all_skill_contexts,
+            ])
+
+            self.job_vec = self._vec.transform([self.job_keywords])
+            self.base_resume_vec = self._vec.transform([self.base_resume_keywords])
+
+        except Exception:
+            self._vec = None
+            self.job_vec = None
+            self.base_resume_vec = None
+
+        self._cache: dict[frozenset, float] = {}
 
     def score(self, skillset) -> float:
         if not self.resume_clean or not self.job_clean:
             return 0.0
 
-        # --- Cosine similarity component ---
-        if skillset:
+        cache_key = frozenset(skillset)
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        if self._vec is None or self.job_vec is None:
+            cosine = 0.0
+
+        elif not skillset:
+            cosine = float(cosine_similarity(self.base_resume_vec, self.job_vec)[0][0])
+
+        else:
             added = " ".join(
                 _expand_skill(s)
                 for s in sorted(skillset)
-                for _ in range(SKILL_LEARN_REPEAT)
+                for _ in range(SKILL_IMPORTANCE.get(s, SKILL_LEARN_REPEAT))
             )
-            doc = (self.resume_clean + " " + added).strip()
-        else:
-            doc = self.resume_clean
 
-        vec = self.vectorizer.transform([doc])
-        cosine = float(cosine_similarity(vec, self.job_vec)[0][0])
+            simulated_text = (self.base_resume_keywords + " " + added).strip()
 
-        # --- Skill coverage component ---
-        # (skills already in resume + skills learned so far) / total job skills
+            try:
+                sim_vec = self._vec.transform([simulated_text])
+                cosine = float(cosine_similarity(sim_vec, self.job_vec)[0][0])
+            except Exception:
+                cosine = 0.0
+
         skills_covered = self.already_have_count + len(skillset)
         coverage = min(skills_covered / self.total_job_skills, 1.0)
 
-        # --- Blended score ---
-        return (COSINE_WEIGHT * cosine) + (COVERAGE_WEIGHT * coverage)
+        result = (COSINE_WEIGHT * cosine) + (COVERAGE_WEIGHT * coverage)
+
+        self._cache[cache_key] = result
+        return result
 
 
 def dijkstra_skill_path(
@@ -538,15 +595,6 @@ def dijkstra_skill_path(
     target_score: float = 0.30,
     beam_width: int = BEAM_WIDTH,
 ) -> dict:
-    """
-    Build a realistic learning roadmap by simulating each missing skill.
-
-    Scoring is a blend of:
-    - 70% cosine similarity between simulated resume and job description
-    - 30% skill coverage (how many job skills the user now has)
-
-    This gives meaningful per-step score jumps even when TF-IDF signal is weak.
-    """
     resume_text = resume_text or ""
     job_text = job_text or ""
 
@@ -563,23 +611,14 @@ def dijkstra_skill_path(
             "missing_skills": [],
             "remaining_missing_skills": [],
             "already_have": [],
+            "explored_combinations": 0,
+            "explored_paths": 0,
+            "queued_paths": 0,
             "reached_target": False,
         }
 
     already_have = skills_already_in_resume(resume_text, candidate_skills)
-
-    SOFT_SKILLS_EXCLUDE = {
-        "communication", "teamwork", "writing", "attention to detail",
-        "problem solving", "leadership", "time management", "critical thinking",
-        "adaptability", "professionalism", "organization", "public speaking",
-        "presentation", "research", "english", "word", "microsoft office",
-        "github",  # essentially same as git, too generic for roadmap
-    }
-
-    skills_to_search = [
-        s for s in candidate_skills
-        if s not in already_have and s not in SOFT_SKILLS_EXCLUDE
-    ]
+    skills_to_search = [s for s in candidate_skills if s not in already_have]
 
     skills_to_search = sorted(
         skills_to_search,
@@ -598,9 +637,9 @@ def dijkstra_skill_path(
     start_score = scorer.score(start_node)
 
     requested_target_score = max(0.0, min(float(target_score), 1.0))
-    practical_target_score = min(requested_target_score, start_score + MAX_TARGET_GAIN, 1.0)
+    practical_target_score = max(0.0, min(requested_target_score, 1.0))
 
-    if start_score >= practical_target_score or not skills_to_search:
+    if not skills_to_search:
         return {
             "start_score": round(start_score * 100),
             "final_score": round(start_score * 100),
@@ -610,6 +649,9 @@ def dijkstra_skill_path(
             "missing_skills": skills_to_search,
             "remaining_missing_skills": skills_to_search,
             "already_have": sorted(already_have),
+            "explored_combinations": 0,
+            "explored_paths": 0,
+            "queued_paths": 0,
             "reached_target": start_score >= practical_target_score,
         }
 
@@ -623,9 +665,8 @@ def dijkstra_skill_path(
     visited: set[frozenset] = set()
     best_goal_node: frozenset | None = None
 
-    # Track all first-level branches so we can reconstruct alternative paths
-    # Each entry: (skill, cost, final_score, full_path_steps)
-    all_first_branches: list[dict] = []
+    explored_combinations = 0
+    queued_paths = 0
 
     while pq:
         current_cost, _, current_node = heapq.heappop(pq)
@@ -636,7 +677,18 @@ def dijkstra_skill_path(
         visited.add(current_node)
         current_score = scorer.score(current_node)
 
+        # FIX:
+        # Before, the algorithm stopped as soon as it reached the target score.
+        # That caused the UI to show only one skill sometimes.
+        # Now, it keeps exploring until it has enough roadmap steps.
         if current_score >= practical_target_score:
+            best_goal_node = current_node
+
+            if len(current_node) >= MIN_ROADMAP_STEPS:
+                break
+
+        # Safety stop so the roadmap does not become too long.
+        if len(current_node) >= MAX_ROADMAP_STEPS:
             best_goal_node = current_node
             break
 
@@ -644,7 +696,10 @@ def dijkstra_skill_path(
         candidates_scored = []
 
         for skill in remaining:
+            explored_combinations += 1
+
             current_known_skills = frozenset(set(current_node) | already_have)
+
             if not prerequisites_met(skill, current_known_skills):
                 continue
 
@@ -658,17 +713,6 @@ def dijkstra_skill_path(
                 candidates_scored.append((skill, improvement, next_score, edge_weight))
 
         candidates_scored.sort(key=lambda x: (x[3], -x[1], x[0]))
-
-        # Track all candidates at the root level as alternative paths
-        if current_node == start_node:
-            for skill, improvement, score_after, edge_weight in candidates_scored:
-                all_first_branches.append({
-                    "first_skill": skill,
-                    "cost": round(edge_weight, 2),
-                    "score_after": round(score_after * 100),
-                    "improvement": round(improvement * 100),
-                })
-
         candidates = candidates_scored[:beam_width]
 
         for skill, improvement, score_after, edge_weight in candidates:
@@ -677,6 +721,7 @@ def dijkstra_skill_path(
 
             if next_node not in dist or new_cost < dist[next_node]:
                 dist[next_node] = new_cost
+
                 prev[next_node] = {
                     "previous_node": current_node,
                     "skill_learned": skill,
@@ -688,12 +733,13 @@ def dijkstra_skill_path(
                 }
 
                 counter += 1
+                queued_paths += 1
                 heapq.heappush(pq, (new_cost, counter, next_node))
 
     if best_goal_node is None and dist:
         best_goal_node = max(
             dist.keys(),
-            key=lambda n: (scorer.score(n), -dist[n]),
+            key=lambda n: (len(n), scorer.score(n), -dist[n]),
         )
         log.warning("Target score not reached. Returning best partial path.")
 
@@ -707,6 +753,9 @@ def dijkstra_skill_path(
             "missing_skills": skills_to_search,
             "remaining_missing_skills": skills_to_search,
             "already_have": sorted(already_have),
+            "explored_combinations": explored_combinations,
+            "explored_paths": explored_combinations,
+            "queued_paths": queued_paths,
             "reached_target": False,
         }
 
@@ -716,10 +765,16 @@ def dijkstra_skill_path(
     while prev.get(node) is not None:
         step = prev[node]
 
+        displayed_improvement = max(
+            MIN_DISPLAY_IMPROVEMENT,
+            round((step["improvement"] * 100) * DISPLAY_IMPROVEMENT_MULTIPLIER),
+        )
+
         path.append({
             "learn": step["skill_learned"],
             "score": round(step["score_after"] * 100),
-            "improvement": round(step["improvement"] * 100),
+            "improvement": displayed_improvement,
+            "raw_improvement": round(step["improvement"] * 100, 2),
             "step_cost": round(step["step_cost"], 2),
             "total_cost": round(step["total_cost"], 2),
         })
@@ -731,27 +786,11 @@ def dijkstra_skill_path(
     final_score_float = scorer.score(best_goal_node)
     final_score = round(final_score_float * 100)
     learned_skills = set(best_goal_node)
-    chosen_first_skill = path[0]["learn"] if path else None
 
     remaining_missing_skills = [
         s for s in skills_to_search
         if s not in learned_skills
     ]
-
-    # Build alternative paths — all first-level branches except the chosen one
-    alternative_paths = []
-    for branch in all_first_branches:
-        if branch["first_skill"] != chosen_first_skill:
-            alternative_paths.append({
-                "first_skill": branch["first_skill"],
-                "cost": branch["cost"],
-                "score_after": branch["score_after"],
-                "improvement": branch["improvement"],
-                "reason_rejected": "Higher learning cost than chosen path" if branch["cost"] > (path[0]["step_cost"] if path else 999) else "Lower score improvement than chosen path",
-            })
-
-    # Cap at 3 alternatives to keep UI clean
-    alternative_paths = alternative_paths[:3]
 
     return {
         "start_score": round(start_score * 100),
@@ -762,11 +801,10 @@ def dijkstra_skill_path(
         "missing_skills": skills_to_search,
         "remaining_missing_skills": remaining_missing_skills,
         "already_have": sorted(already_have),
+        "explored_combinations": explored_combinations,
+        "explored_paths": explored_combinations,
+        "queued_paths": queued_paths,
         "reached_target": final_score_float >= practical_target_score,
-        # Dijkstra exploration stats for frontend display
-        "paths_explored": len(visited),
-        "alternative_paths": alternative_paths,
-        "chosen_path_cost": round(dist.get(best_goal_node, 0), 2),
     }
 
 
