@@ -648,6 +648,14 @@ function getJobCategory(matchScore, prefScore){
   return "Low Preference + Low Match";
 }
 
+function filterJobsByResume(jobs){
+  return jobs
+    .map(job => {
+      const match = computeMatchScore(job);
+      return { ...job, match_score: match };
+    })
+    .filter(job => job.match_score >= 0.25); // strict filter
+}
 
 function renderJobs(jobs){
   const feed = document.getElementById("jobFeed");
