@@ -972,6 +972,7 @@ function isSoftwareJob(jobTitle) {
 // ===============================
 // GUIDANCE MODE
 // ===============================
+
 async function runGuidance(jobId){
   const panel = document.getElementById("guidancePanel");
 
@@ -1009,7 +1010,7 @@ async function runGuidance(jobId){
 
       <div class="score-row">
         <span class="score-pill">Start ${Math.round(data.start_score || 0)}%</span>
-        <span class="score-pill">Final ${Math.round(data.final_score || 0)}%</span>
+         <span class="score-pill">Final ${Math.round((data.start_score || 0) + sortedPath.reduce((sum, s) => sum + (s.improvement || 0), 0))}%</span>
         <span class="score-pill">${data.reached_target ? "Target Reached" : "Keep Improving"}</span>
       </div>
 
@@ -1045,11 +1046,11 @@ async function runGuidance(jobId){
       <div class="pref-list">
         ${(() => {
           if (!sortedPath.length) return `<p class="muted">No roadmap steps found.</p>`;
-          let runningScore = Math.round(data.start_score || 0);
+          let runningScore = data.start_score || 0;
           const maxImprovement = Math.max(...sortedPath.map(s => s.improvement || 0));
           return sortedPath.map((step, i) => {
             const isFirst = i === 0;
-            runningScore += Math.round(step.improvement || 0);
+            runningScore += step.improvement || 0;
             const barWidth = maxImprovement > 0
               ? Math.round((step.improvement / maxImprovement) * 100)
               : 100;
@@ -1075,7 +1076,7 @@ async function runGuidance(jobId){
                   <div style="height:4px;width:${barWidth}%;background:linear-gradient(90deg,#2dc4b3,#1ea899);border-radius:2px;"></div>
                 </div>
                 <small style="color:var(--text-muted,#8899a6)">
-                  Score after: ${runningScore}%
+                  Score after: ${Math.round(runningScore)}%
                   ${isFirst ? '&nbsp;·&nbsp;<span style="color:#2dc4b3">Start here — lowest cost, highest efficiency</span>' : ''}
                 </small>
               </div>
@@ -1096,7 +1097,6 @@ async function runGuidance(jobId){
     logApi("GUIDANCE ERROR", { error:error.message });
   }
 }
-
 
 // ===============================
 // COURSE RECOMMENDATIONS
