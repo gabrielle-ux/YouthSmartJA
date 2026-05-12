@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>YouthSmartJA — AI Career Guidance Dashboard</title>
+  <meta name="description" content="AI-powered career guidance platform for Jamaican youth."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"/>
+</head>
+
+<body>
+
+<nav class="navbar">
+  <span class="brand">YouthSmartJA</span>
+
+  <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/features">Features</a>
+    <a href="/about">How It Works</a>
+    <a href="/register">Login/Register</a>
+    <a href="/dashboard">Dashboard</a>
+  </div>
+</nav>
+
+<section id="dashboard" class="slide dashboard-section hidden">
+  <h2>Your Career Dashboard</h2>
+
+  <div class="dashboard-top">
+    <div>
+      <p class="muted">Logged in as</p>
+      <h3 id="currentUserName">Student</h3>
+    </div>
+
+    <button id="logoutBtn" class="btn ghost-btn">Logout</button>
+  </div>
+
+  <div class="dashboard-grid">
+
+    <div class="dash-card reveal">
+      <h3>Profile Setup</h3>
+      <p class="muted">Upload your resume to unlock job matches.</p>
+
+      <input id="resumeFile" type="file" accept=".pdf,.doc,.docx">
+      <button id="uploadResumeBtn" class="btn primary-btn">Upload Resume</button>
+
+      <p id="resumeStatus" class="muted small"></p>
+    </div>
+
+    <div class="dash-card reveal">
+      <h3>Skill Tags</h3>
+
+      <div id="skillTags" class="tag-list">
+        <span class="tag">No resume uploaded yet</span>
+      </div>
+    </div>
+
+    <div class="dash-card reveal">
+      <h3>Preference Filtering</h3>
+
+      <input id="careerInterestPref" type="text" placeholder="Career Interest">
+
+      <select id="jobTypePref">
+        <option value="">Preferred Job Type</option>
+        <option value="Internship">Internship</option>
+        <option value="Part-time">Part-time</option>
+        <option value="Full-time">Full-time</option>
+        <option value="Freelance">Freelance</option>
+      </select>
+
+      <select id="workStylePref">
+        <option value="">Work Style</option>
+        <option value="Remote">Remote</option>
+        <option value="Hybrid">Hybrid</option>
+        <option value="On-site">On-site</option>
+      </select>
+
+      <select id="availabilityPref">
+        <option value="">Availability</option>
+        <option value="Weekends">Weekends</option>
+        <option value="Evenings">Evenings</option>
+        <option value="Summer">Summer</option>
+        <option value="Flexible">Flexible</option>
+      </select>
+
+      <button id="savePrefsBtn" class="btn ghost-btn">Save Preferences</button>
+    </div>
+
+    <div class="dash-card reveal">
+      <h3>Search Jobs</h3>
+
+      <input id="jobSearchInput" type="text" placeholder="Search software, data, design...">
+      <button id="searchJobsBtn" class="btn primary-btn">Search Jobs</button>
+    </div>
+
+    <div class="dash-card wide reveal">
+      <h3>Matched Job Feed</h3>
+      <p class="muted">
+        Jobs are grouped by match and preference strength.
+      </p>
+
+      <div id="jobFeed" class="job-feed">
+        <p class="muted">Your matched jobs will appear here after resume upload.</p>
+      </div>
+    </div>
+
+    <div class="dash-card wide reveal">
+      <h3>Selected Job Guidance</h3>
+
+      <div id="guidancePanel">
+        <p class="muted">Select a job and run Guidance Mode.</p>
+      </div>
+    </div>
+
+    <div class="dash-card wide reveal">
+      <h3>Bookmarks</h3>
+
+      <div id="bookmarkList">
+        <p class="muted">Saved jobs will appear here.</p>
+      </div>
+    </div>
+
+    <div class="dash-card wide reveal">
+      <h3>API Log</h3>
+      <pre id="apiLog">Waiting for actions...</pre>
+    </div>
+
+  </div>
+</section>
+
+<script src="{{ url_for('static', filename='script.js') }}" defer></script>
+</body>
+</html>

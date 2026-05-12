@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Features — YouthSmartJA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"/>
+</head>
+<body>
+
+<nav class="navbar">
+  <span class="brand">YouthSmartJA</span>
+  <button class="nav-toggle" aria-label="Toggle menu">☰</button>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/features">Features</a>
+    <a href="/about">How It Works</a>
+    <a href="/register">Login/Register</a>
+    <a href="/dashboard">Dashboard</a>
+  </div>
+</nav>
+
+<section id="features" class="slide">
+  <h2>Platform Features</h2>
+  <p class="muted lede-sm">
+    YouthSmartJA is an AI-powered job matching and career guidance dashboard
+    that helps students move from resume upload to skill growth.
+  </p>
+
+  <div class="grid grid-3">
+    <div class="feature reveal">
+      <div class="icon-pill">📄</div>
+      <h3>Resume Upload</h3>
+      <p>Students upload a resume before accessing personalized matches.</p>
+    </div>
+    <div class="feature reveal">
+      <div class="icon-pill">🧠</div>
+      <h3>NLP Processing</h3>
+      <p>The system extracts keywords, skills, and useful resume signals.</p>
+    </div>
+    <div class="feature reveal">
+      <div class="icon-pill">🎯</div>
+      <h3>Cosine Matching</h3>
+      <p>Jobs are scored based on similarity between resume text and job requirements.</p>
+    </div>
+    <div class="feature reveal">
+      <div class="icon-pill">⚙️</div>
+      <h3>Preference Scoring</h3>
+      <p>Job type, location, and user preferences affect the final job feed.</p>
+    </div>
+    <div class="feature reveal">
+      <div class="icon-pill">🛣️</div>
+      <h3>Guidance Mode</h3>
+      <p>Dijkstra-style pathing identifies the best missing skills to learn next.</p>
+    </div>
+    <div class="feature reveal">
+      <div class="icon-pill">🔖</div>
+      <h3>Bookmarks</h3>
+      <p>Students can save jobs and return to them while tracking progress.</p>
+    </div>
+  </div>
+
+  <h3 class="sub">Technical Stack</h3>
+  <div class="stack">
+    <div class="tag"><span>Frontend</span><p>HTML · CSS · JavaScript</p></div>
+    <div class="tag"><span>Backend</span><p>Python · Flask API</p></div>
+    <div class="tag"><span>Database</span><p>MySQL</p></div>
+    <div class="tag"><span>AI/NLP</span><p>TF-IDF · Cosine Similarity · Dijkstra</p></div>
+  </div>
+</section>
+
+<script src="{{ url_for('static', filename='script.js') }}" defer></script>
+</body>
+</html>
