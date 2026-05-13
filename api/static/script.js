@@ -465,35 +465,27 @@ if(sidebarOverlay) sidebarOverlay.addEventListener("click", hideSidebar);
 // GET ACTIVE FILTERS
 // ===============================
 function getActiveFilters(){
-  const jobType = document.getElementById("jobTypePref")?.value
-               || document.getElementById("preferredJobType")?.value
-               || localStorage.getItem("ys_pref_job_type")
-               || "";
 
-  const workStyle = document.getElementById("workStylePref")?.value
-                 || document.getElementById("workStyle")?.value
-                 || localStorage.getItem("ys_pref_work_style")
-                 || "";
+  const careerArea =
+    document.getElementById("careerInterestPref")?.value
+    || localStorage.getItem("ys_pref_career_area")
+    || "";
 
-  const location = document.getElementById("locationPref")?.value
-                || localStorage.getItem("ys_pref_location")
-                || "";
+  const skill =
+    document.getElementById("jobTypePref")?.value
+    || localStorage.getItem("ys_pref_skill")
+    || "";
 
-  const availability = document.getElementById("availabilityPref")?.value
-                    || document.getElementById("availability")?.value
-                    || localStorage.getItem("ys_pref_availability")
-                    || "";
+  const workStyle =
+    document.getElementById("workStylePref")?.value
+    || localStorage.getItem("ys_pref_work_style")
+    || "";
 
-  let typeParam = jobType.toLowerCase();
-  if(workStyle.toLowerCase() === "remote"){
-    typeParam = "remote";
-  } else if(workStyle.toLowerCase() === "on-site" || workStyle.toLowerCase() === "onsite"){
-    typeParam = "onsite";
-  } else if(workStyle.toLowerCase() === "hybrid"){
-    typeParam = "";
-  }
-
-  return { jobType, workStyle, location, availability, typeParam };
+  return {
+    careerArea,
+    skill,
+    workStyle
+  };
 }
 
 
@@ -501,35 +493,57 @@ function getActiveFilters(){
 // BUILD SEARCH URL
 // ===============================
 function buildSearchUrl(keyword = ""){
-  const { typeParam, location } = getActiveFilters();
+
+  const { careerArea, skill, workStyle } = getActiveFilters();
 
   const params = new URLSearchParams();
 
-  if(keyword) params.set("q", keyword);
-  if(typeParam && typeParam !== "preferred job type") params.set("type", typeParam);
-  if(location) params.set("location", location);
-  if(!location) params.set("country", "jm");
+  if(keyword){
+    params.set("q", keyword);
+  }
+
+  if(careerArea){
+    params.set("career_area", careerArea);
+  }
+
+  if(skill){
+    params.set("skill", skill);
+  }
+
+  if(workStyle){
+    params.set("work_style", workStyle);
+  }
+
   params.set("limit", "20");
 
   return `${API_BASE}/api/jobs/search?${params.toString()}`;
 }
 
 
+// ===============================
+// SAVE PREFERENCES
+// ===============================
 if(savePrefsBtn){
-  savePrefsBtn.addEventListener("click", () => {
-    const { jobType, workStyle, location, availability } = getActiveFilters();
 
-    localStorage.setItem("ys_pref_job_type",     jobType);
-    localStorage.setItem("ys_pref_work_style",   workStyle);
-    localStorage.setItem("ys_pref_location",     location);
-    localStorage.setItem("ys_pref_availability", availability);
+  savePrefsBtn.addEventListener("click", () => {
+
+    const { careerArea, skill, workStyle } = getActiveFilters();
+
+    localStorage.setItem("ys_pref_career_area", careerArea);
+    localStorage.setItem("ys_pref_skill", skill);
+    localStorage.setItem("ys_pref_work_style", workStyle);
 
     showFlash("Preferences saved! Refreshing jobs...");
+
     hideSidebar();
 
-    const currentKeyword = document.getElementById("jobSearchInput")?.value?.trim() || "";
+    const currentKeyword =
+      document.getElementById("jobSearchInput")?.value?.trim() || "";
+
     loadFilteredJobs(currentKeyword);
+
   });
+
 }
 
 
@@ -579,6 +593,7 @@ if(searchJobsBtn){
 }
 
 const jobSearchInput = document.getElementById("jobSearchInput");
+
 if(jobSearchInput){
   jobSearchInput.addEventListener("keydown", (e) => {
     if(e.key === "Enter"){
@@ -589,7 +604,7 @@ if(jobSearchInput){
 
 
 // ===============================
-// LOAD MATCHES (resume-based fallback)
+// LOAD MATCHES
 // ===============================
 async function loadMatches(){
   const feed = document.getElementById("jobFeed");
@@ -618,8 +633,12 @@ async function loadMatches(){
 }
 
 
+// ===============================
+// PREFERENCE SCORE
+// ===============================
 function calculatePreferenceScore(job){
-  const { jobType, workStyle, availability } = getActiveFilters();
+
+  const { careerArea, skill, workStyle } = getActiveFilters();
 
   let score = 0;
 
@@ -627,15 +646,28 @@ function calculatePreferenceScore(job){
     ${job.title || ""}
     ${job.description || ""}
     ${job.company || ""}
-    ${job.job_type || ""}
-    ${job.city || ""}
-    ${job.location || ""}
-    ${job.country || ""}
+    ${job.keywords || ""}
   `.toLowerCase();
 
-  if(jobType     && text.includes(jobType.toLowerCase()))       score += 0.40;
-  if(workStyle   && text.includes(workStyle.toLowerCase()))     score += 0.30;
-  if(availability && text.includes(availability.toLowerCase())) score += 0.30;
+  if(careerArea && text.includes(careerArea.toLowerCase())){
+    score += 0.4;
+  }
+
+  if(skill && text.includes(skill.toLowerCase())){
+    score += 0.4;
+  }
+
+  if(workStyle === "Remote" && job.is_remote){
+    score += 0.2;
+  }
+
+  if(workStyle === "On-site" && !job.is_remote){
+    score += 0.2;
+  }
+
+  if(workStyle === "Hybrid" && text.includes("hybrid")){
+    score += 0.2;
+  }
 
   return Math.min(score, 1);
 }
@@ -648,11 +680,11 @@ function getJobCategory(matchScore, prefScore){
   return "Low Preference + Low Match";
 }
 
+
 function renderJobs(jobs){
   const feed = document.getElementById("jobFeed");
   if(!feed) return;
 
-  // Sort highest match score first
   jobs = [...jobs].sort((a, b) => {
     const scoreA = a.match_score ?? a.similarity ?? a.score ?? 0;
     const scoreB = b.match_score ?? b.similarity ?? b.score ?? 0;
@@ -713,6 +745,7 @@ function renderJobs(jobs){
   updateCareerReadiness(Math.round(totalFinal / jobs.length));
 }
 
+
 function updateCareerReadiness(score){
   const box = document.getElementById("careerReadiness");
   if(box){ box.textContent = `${score || "--"}%`; }
@@ -749,8 +782,10 @@ function filterSoftSkillTags(skills){
 }
 
 function isSoftwareJob(jobTitle){
-  const techTerms = ["developer", "engineer", "software", "backend", "frontend",
-                     "data", "devops", "cloud", "web", "fullstack", "full stack", "programmer"];
+  const techTerms = [
+    "developer", "engineer", "software", "backend", "frontend",
+    "data", "devops", "cloud", "web", "fullstack", "full stack", "programmer"
+  ];
   return techTerms.some(term => (jobTitle || "").toLowerCase().includes(term));
 }
 
@@ -794,34 +829,42 @@ async function runGuidance(jobId){
         <span class="score-pill">Final ${Math.round((data.start_score || 0) + sortedPath.reduce((sum, s) => sum + (s.improvement || 0), 0))}%</span>
         <span class="score-pill">${data.reached_target ? "Target Reached" : "Keep Improving"}</span>
       </div>
+
       ${pathsExplored > 0 ? `
       <div style="margin:1rem 0;padding:0.75rem 1rem;background:rgba(13,122,95,0.08);border-left:3px solid #2dc4b3;border-radius:6px;font-size:0.82rem;color:var(--text-muted,#8899a6);">
         Dijkstra explored <strong style="color:#2dc4b3">${pathsExplored} skill combinations</strong>
         and selected the most efficient learning path
       </div>` : ""}
+
       <h3 class="sub">Missing Skills</h3>
       <div class="tag-list">
         ${missingSkills.length
           ? missingSkills.map(skill => `<span class="tag">${escapeHTML(skill)}</span>`).join("")
           : `<span class="tag">No missing skills listed</span>`}
       </div>
+
       <h3 class="sub" style="margin-top:1.5rem">Skill Progression Roadmap</h3>
       <p style="font-size:0.8rem;color:var(--text-muted,#8899a6);margin:-0.4rem 0 0.8rem">
         ${pathsExplored > 0
           ? `Optimal route selected from ${pathsExplored} explored combinations`
           : "Optimal route selected by Dijkstra algorithm"}
       </p>
+
       <div class="pref-list">
         ${(() => {
           if(!sortedPath.length) return `<p class="muted">No roadmap steps found.</p>`;
+
           let runningScore = data.start_score || 0;
           const maxImprovement = Math.max(...sortedPath.map(s => s.improvement || 0));
+
           return sortedPath.map((step, i) => {
             const isFirst = i === 0;
             runningScore += step.improvement || 0;
+
             const barWidth = maxImprovement > 0
               ? Math.round((step.improvement / maxImprovement) * 100)
               : 100;
+
             return `
             <div class="pref" style="border-left:3px solid ${isFirst ? '#2dc4b3' : '#1a8a7a'};padding-left:0.75rem;opacity:${Math.max(0.6, 1 - i * 0.08)};max-width:100%;box-sizing:border-box;">
               <span class="dot dot-1"></span>
@@ -832,9 +875,11 @@ async function runGuidance(jobId){
                     +${Math.round(step.improvement || 0)}%
                   </span>
                 </div>
+
                 <div style="height:4px;background:rgba(45,196,179,0.15);border-radius:2px;margin:6px 0 4px;">
                   <div style="height:4px;width:${barWidth}%;background:linear-gradient(90deg,#2dc4b3,#1ea899);border-radius:2px;"></div>
                 </div>
+
                 <small style="color:var(--text-muted,#8899a6)">
                   Score after: ${Math.round(runningScore)}%
                   ${isFirst ? ' &nbsp;·&nbsp; <span style="color:#2dc4b3">Start here</span>' : ''}
@@ -844,6 +889,7 @@ async function runGuidance(jobId){
           }).join("");
         })()}
       </div>
+
       <div id="courseSection">
         <button id="loadCoursesBtn" class="btn primary-btn" style="margin-top:1.5rem" onclick="loadCourses(${jobId})">
           Find Courses
@@ -872,6 +918,7 @@ async function loadCourses(jobId){
   try{
     const res = await fetch(`${API_BASE}/api/jobs/${jobId}/guidance-courses`, { headers:authHeaders() });
     const data = await res.json();
+
     logApi("COURSES RESPONSE", data);
 
     if(!res.ok || data.ok === false){
@@ -887,7 +934,9 @@ async function loadCourses(jobId){
         <h3 class="sub">Course Recommendations</h3>
         <p class="lede-sm">${escapeHTML(aiMessage)}</p>
       </div>
+
       <h3 class="sub">Learning Path</h3>
+
       <div class="course-grid">
         ${courses.length
           ? courses.map(course => `
@@ -896,7 +945,7 @@ async function loadCourses(jobId){
               <div>
                 <strong>${escapeHTML(course.name)}</strong>
                 <p class="small muted">${escapeHTML(course.guidance_note || "")}</p>
-                <a href="${course.link}" target="_blank" class="course-link">${escapeHTML(course.phrase || "View Course")}</a>
+                <a href="${escapeHTML(course.link)}" target="_blank" class="course-link">${escapeHTML(course.phrase || "View Course")}</a>
               </div>
             </div>`).join("")
           : `<p class="muted">No specific courses found for these skills.</p>`}
@@ -905,6 +954,7 @@ async function loadCourses(jobId){
 
   }catch(error){
     logApi("COURSES ERROR", { error:error.message });
+    courseSection.innerHTML = `<p class="muted">Could not connect to backend.</p>`;
   }
 }
 
@@ -944,6 +994,7 @@ async function loadBookmarks(){
   try{
     const res = await fetch(`${API_BASE}/api/bookmarks`, { headers:authHeaders() });
     const data = await res.json();
+
     logApi("BOOKMARKS RESPONSE", data);
 
     const bookmarks = data.bookmarks || data.jobs || data;
@@ -955,6 +1006,7 @@ async function loadBookmarks(){
 
     box.innerHTML = bookmarks.map(job => {
       const jobId = job.job_id || job.id;
+
       return `
         <div class="job-card">
           <h3>${escapeHTML(job.title || "Saved Job")}</h3>
@@ -983,6 +1035,7 @@ async function removeBookmark(jobId){
 
     const data = await res.json().catch(() => ({}));
     logApi("REMOVE BOOKMARK RESPONSE", data);
+
     await loadBookmarks();
 
   }catch(error){
@@ -995,11 +1048,9 @@ async function removeBookmark(jobId){
 // DASHBOARD & AUTH STATE CONTROL
 // ===============================
 window.addEventListener("DOMContentLoaded", async () => {
-  const token      = getToken();
-  const storedName = localStorage.getItem("ys_user_name");
+  const token       = getToken();
+  const storedName  = localStorage.getItem("ys_user_name");
 
-  // 1. GLOBAL AUTH CHECK
-  // Public pages + /jobs/* detail pages don't redirect to login.
   const publicPages = ["/register", "/", "/about"];
   const isPublic = publicPages.includes(window.location.pathname)
                 || window.location.pathname.startsWith("/jobs/");
@@ -1011,22 +1062,25 @@ window.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
-  // 2. DASHBOARD PAGE LOGIC
   const dashboard = document.getElementById("dashboard");
+
   if(dashboard){
     dashboard.classList.remove("hidden");
+
     const nameBox = document.getElementById("currentUserName");
-    if(nameBox && storedName) nameBox.textContent = storedName;
+    if(nameBox && storedName){
+      nameBox.textContent = storedName;
+    }
+
     await loadSavedResume();
   }
 
-  // 3. JOBS PAGE LOGIC
   const jobFeed = document.getElementById("jobFeed");
+
   if(jobFeed){
     await loadFilteredJobs("");
   }
 
-  // 4. BOOKMARKS — runs on ANY page that has a bookmarkList element
   if(document.getElementById("bookmarkList")){
     await loadBookmarks();
   }

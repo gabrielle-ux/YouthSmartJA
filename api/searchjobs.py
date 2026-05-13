@@ -13,6 +13,7 @@ load_dotenv()
 
 jobs_bp = Blueprint("jobs", __name__)
 
+
 def get_db():
     return mysql.connector.connect(
         host=os.getenv("DB_HOST", "127.0.0.1"),
@@ -22,7 +23,11 @@ def get_db():
         port=int(os.getenv("DB_PORT", 3306)),
     )
 
+
 def get_score_from_match(match):
+    if not match:
+        return 0
+
     return (
         match.get("match_score")
         or match.get("similarity_score")
@@ -31,6 +36,36 @@ def get_score_from_match(match):
         or match.get("score")
         or 0
     )
+
+
+def calculate_preference_score(job, career_area="", skill="", work_style=""):
+    score = 0.0
+
+    text = f"""
+        {job.get("title") or ""}
+        {job.get("company") or ""}
+        {job.get("description") or ""}
+        {job.get("keywords") or ""}
+    """.lower()
+
+    if career_area and career_area.lower() in text:
+        score += 0.4
+
+    if skill and skill.lower() in text:
+        score += 0.4
+
+    work_style = work_style.lower()
+
+    if work_style == "remote" and job.get("is_remote"):
+        score += 0.2
+
+    elif work_style in ("on-site", "onsite") and not job.get("is_remote"):
+        score += 0.2
+
+    elif work_style == "hybrid" and "hybrid" in text:
+        score += 0.2
+
+    return round(min(score, 1.0), 2)
 
 
 # ---------------------------------------------------------------------------
@@ -42,10 +77,17 @@ def search_jobs():
     user_id = int(get_jwt_identity())
 
     keyword = request.args.get("q", "").strip()
+
+    # New frontend filters
+    career_area = request.args.get("career_area", "").strip().lower()
+    skill = request.args.get("skill", "").strip().lower()
+    work_style = request.args.get("work_style", "").strip().lower()
+
+    # Older filters kept so old frontend calls do not break
     location = request.args.get("location", "").strip()
     job_type = request.args.get("type", "").strip().lower()
-    skill = request.args.get("skill", "").strip()
     salary_min = request.args.get("salary_min", type=int)
+
     limit = min(request.args.get("limit", 20, type=int), 100)
     offset = request.args.get("offset", 0, type=int)
 
@@ -74,33 +116,77 @@ def search_jobs():
             LEFT JOIN job_skills s ON s.job_id = j.id
             WHERE 1=1
         """
+
         params = []
 
+        # Search bar
         if keyword:
+            kw = f"%{keyword.lower()}%"
             query += """
                 AND (
-                    j.title LIKE %s
-                    OR j.description LIKE %s
-                    OR j.keywords LIKE %s
+                    LOWER(j.title) LIKE %s
+                    OR LOWER(j.description) LIKE %s
+                    OR LOWER(j.keywords) LIKE %s
                 )
             """
-            kw = f"%{keyword}%"
             params.extend([kw, kw, kw])
 
+        # Career Area dropdown
+        if career_area:
+            ca = f"%{career_area}%"
+            query += """
+                AND (
+                    LOWER(j.title) LIKE %s
+                    OR LOWER(j.description) LIKE %s
+                    OR LOWER(j.keywords) LIKE %s
+                )
+            """
+            params.extend([ca, ca, ca])
+
+        # Skill dropdown
+        if skill:
+            query += """
+                AND (
+                    LOWER(s.skill) = %s
+                    OR LOWER(j.title) LIKE %s
+                    OR LOWER(j.description) LIKE %s
+                    OR LOWER(j.keywords) LIKE %s
+                )
+            """
+            skill_like = f"%{skill}%"
+            params.extend([skill, skill_like, skill_like, skill_like])
+
+        # Work Style dropdown
+        if work_style == "remote":
+            query += " AND j.is_remote = 1"
+
+        elif work_style in ("on-site", "onsite"):
+            query += " AND j.is_remote = 0"
+
+        elif work_style == "hybrid":
+            query += """
+                AND (
+                    LOWER(j.description) LIKE %s
+                    OR LOWER(j.keywords) LIKE %s
+                    OR LOWER(j.title) LIKE %s
+                )
+            """
+            params.extend(["%hybrid%", "%hybrid%", "%hybrid%"])
+
+        # Old location filter support
         if location:
-            query += " AND (j.city LIKE %s OR j.country LIKE %s)"
             loc = f"%{location}%"
+            query += " AND (j.city LIKE %s OR j.country LIKE %s)"
             params.extend([loc, loc])
 
+        # Old type filter support
         if job_type in ("remote", "work from home"):
             query += " AND j.is_remote = 1"
+
         elif job_type in ("onsite", "on-site", "office"):
             query += " AND j.is_remote = 0"
 
-        if skill:
-            query += " AND LOWER(s.skill) = %s"
-            params.append(skill.lower())
-
+        # Old salary filter support
         if salary_min:
             query += " AND j.salary_max >= %s"
             params.append(salary_min)
@@ -125,8 +211,13 @@ def search_jobs():
     for job in jobs:
         scored = score_map.get(int(job["id"]))
 
-        job["match_score"] = get_score_from_match(scored) if scored else 0
-        job["preference_score"] = 0.5
+        job["match_score"] = get_score_from_match(scored)
+        job["preference_score"] = calculate_preference_score(
+            job,
+            career_area=career_area,
+            skill=skill,
+            work_style=work_style,
+        )
 
     return jsonify({
         "ok": True,

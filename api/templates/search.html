@@ -27,79 +27,91 @@
 
 <section id="search-page" class="slide">
   <h2>Job Opportunities</h2>
-    <div class="dashboard-grid">
-        <div class="dash-card wide reveal">
-            <h3>Search Jobs</h3>
 
-            <input id="jobSearchInput" type="text" placeholder="Search software, data, design...">
-            <button id="searchJobsBtn" class="btn primary-btn">Search Jobs</button>
-            <button id="openFilterBtn" class="btn primary-btn">Filter Jobs</button>
-        </div>
+  <div class="dashboard-grid">
 
-        <!-- The Sidebar Container -->
-        <div id="filterSidebar" class="filter-sidebar">
-            <div class="sidebar-header">
-                <h3>Preference Filtering</h3>
-                <button id="closeFilterBtn" class="close-btn">&times;</button>
-            </div>
-            
-            <div class="sidebar-content">
-                <input id="careerInterestPref" type="text" placeholder="Career Interest">
-                <select id="jobTypePref">
-                    <option value="">Preferred Job Type</option>
-                    <option value="Internship">Internship</option>
-                    <option value="Part-time">Part-time</option>
-                    <option value="Full-time">Full-time</option>
-                    <option value="Freelance">Freelance</option>
-                </select>
+    <div class="dash-card wide reveal">
+      <h3>Search Jobs</h3>
 
-                <select id="workStylePref">
-                    <option value="">Work Style</option>
-                    <option value="Remote">Remote</option>
-                    <option value="Hybrid">Hybrid</option>
-                    <option value="On-site">On-site</option>
-                </select>
+      <input id="jobSearchInput" type="text" placeholder="Search software, data, accounting...">
+      <button id="searchJobsBtn" class="btn primary-btn">Search Jobs</button>
+      <button id="openFilterBtn" class="btn primary-btn">Filter Jobs</button>
+    </div>
 
-                <select id="availabilityPref">
-                    <option value="">Availability</option>
-                    <option value="Weekends">Weekends</option>
-                    <option value="Evenings">Evenings</option>
-                    <option value="Summer">Summer</option>
-                    <option value="Flexible">Flexible</option>
-                </select>
-                <button id="savePrefsBtn" class="btn ghost-btn">Save Preferences</button>
-            </div>
-        </div>
+    <!-- Filter Sidebar -->
+    <div id="filterSidebar" class="filter-sidebar">
+      <div class="sidebar-header">
+        <h3>Preference Filtering</h3>
+        <button id="closeFilterBtn" class="close-btn">&times;</button>
+      </div>
 
-        <!-- Optional Backdrop to dim the screen when open -->
-        <div id="sidebarOverlay" class="sidebar-overlay"></div>
+      <div class="sidebar-content">
 
-        <div class="dash-card wide reveal">
-        <h3>Matched Job Feed</h3>
-        <p class="muted">
-            Jobs are grouped by match and preference strength.
-        </p>
+        <select id="careerInterestPref">
+  <option value="">Career Areas</option>
 
-        <div id="jobFeed" class="job-feed">
-            <p class="muted">Your matched jobs will appear here after resume upload.</p>
-        </div>
-        </div>
+  <option value="software">Software / IT</option>
+  <option value="data">Data / Analytics</option>
+  <option value="ai">AI / Machine Learning</option>
+  <option value="cybersecurity">Cybersecurity</option>
+  <option value="cloud">Cloud / DevOps</option>
+  <option value="web">Web Development</option>
+  <option value="customer service">Customer Service</option>
+  <option value="healthcare">Healthcare</option>
 
-        <div class="dash-card wide reveal">
-        <h3>Selected Job Guidance</h3>
+</select>
 
-        <div id="guidancePanel">
-            <p class="muted">Select a job and run Guidance Mode.</p>
-        </div>
-        </div>
+        <select id="jobTypePref">
+          <option value="">Skill</option>
+          <option value="python">Python</option>
+          <option value="java">Java</option>
+          <option value="javascript">JavaScript</option>
+          <option value="react">React</option>
+          <option value="node">Node</option>
+          <option value="sql">SQL</option>
+          <option value="excel">Excel</option>
+          <option value="accounting">Accounting</option>
+          <option value="customer service">Customer Service</option>
+        </select>
 
-        <div class="dash-card wide reveal">
-       
-        <h3>API Log</h3>
-        <pre id="apiLog">Waiting for actions...</pre>
-        </div>
+        <select id="workStylePref">
+          <option value="">Work Style</option>
+          <option value="Remote">Remote</option>
+          <option value="Hybrid">Hybrid</option>
+          <option value="On-site">On-site</option>
+        </select>
 
-    <div>
+        <button id="savePrefsBtn" class="btn ghost-btn">Save Preferences</button>
+      </div>
+    </div>
+
+    <!-- Sidebar Overlay -->
+    <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+    <div class="dash-card wide reveal">
+      <h3>Matched Job Feed</h3>
+      <p class="muted">
+        Jobs are grouped by match and preference strength.
+      </p>
+
+      <div id="jobFeed" class="job-feed">
+        <p class="muted">Your matched jobs will appear here after resume upload.</p>
+      </div>
+    </div>
+
+    <div class="dash-card wide reveal">
+      <h3>Selected Job Guidance</h3>
+
+      <div id="guidancePanel">
+        <p class="muted">Select a job and run Guidance Mode.</p>
+      </div>
+    </div>
+
+    <div class="dash-card wide reveal">
+      <h3>API Log</h3>
+      <pre id="apiLog">Waiting for actions...</pre>
+    </div>
+
   </div>
 </section>
 
