@@ -37,9 +37,9 @@
     <button id="logoutBtn" class="btn ghost-btn">Logout</button>
   </div>
 
-  <div class="dashboard-grid">
+  <div class="dashboard-grid profile">
 
-    <div class="dash-card reveal">
+    <div class="dash-card reveal half">
       <h3>Profile Setup</h3>
       <p class="muted">Upload your resume to unlock job matches.</p>
 
@@ -49,7 +49,7 @@
       <p id="resumeStatus" class="muted small"></p>
     </div>
 
-    <div class="dash-card reveal">
+    <div class="dash-card reveal half">
       <h3>Skill Tags</h3>
 
       <div id="skillTags" class="tag-list">
@@ -64,13 +64,15 @@
         <p class="muted">Saved jobs will appear here.</p>
       </div>
     </div>
-    <div class="dash-card wide reveal">
-        <h3>Selected Job Guidance</h3>
 
-        <div id="guidancePanel">
-            <p class="muted">Select a job and run Guidance Mode.</p>
-        </div>
+    <div class="dash-card wide reveal">
+      <h3>Selected Job Guidance</h3>
+
+      <div id="guidancePanel">
+        <p class="muted">Select a job and run Guidance Mode.</p>
+      </div>
     </div>
+
     <div class="dash-card wide reveal">
       <h3>API Log</h3>
       <pre id="apiLog">Waiting for actions...</pre>

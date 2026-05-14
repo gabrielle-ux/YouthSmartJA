@@ -878,3 +878,17 @@ footer{
     font-size: 24px;
     cursor: pointer;
 }
+
+
+.profile {
+  display: grid;
+  grid-template-columns: 1fr; /* Forces a single column taking 100% width */
+  width: 100%;                /* Ensures the grid fills its parent container */
+  gap: 20px;                  /* Maintains spacing between the stacked cards */
+}
+
+.half {
+  width: 100%;             /* Forces the card to span the full grid width */
+  box-sizing: border-box;  /* Prevents padding from pushing the card past 100% */
+  max-width: none;         /* Overrides any existing width restrictions */
+}

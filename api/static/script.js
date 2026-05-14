@@ -467,19 +467,13 @@ if(sidebarOverlay) sidebarOverlay.addEventListener("click", hideSidebar);
 function getActiveFilters(){
 
   const careerArea =
-    document.getElementById("careerInterestPref")?.value
-    || localStorage.getItem("ys_pref_career_area")
-    || "";
+    document.getElementById("careerInterestPref")?.value || "";
 
   const skill =
-    document.getElementById("jobTypePref")?.value
-    || localStorage.getItem("ys_pref_skill")
-    || "";
+    document.getElementById("jobTypePref")?.value || "";
 
   const workStyle =
-    document.getElementById("workStylePref")?.value
-    || localStorage.getItem("ys_pref_work_style")
-    || "";
+    document.getElementById("workStylePref")?.value || "";
 
   return {
     careerArea,

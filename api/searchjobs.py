@@ -120,16 +120,26 @@ def search_jobs():
         params = []
 
         # Search bar
+        # Splits phrases like "web developer" into words:
+        # searches for "web" OR "developer" instead of requiring the exact phrase.
         if keyword:
-            kw = f"%{keyword.lower()}%"
-            query += """
-                AND (
-                    LOWER(j.title) LIKE %s
-                    OR LOWER(j.description) LIKE %s
-                    OR LOWER(j.keywords) LIKE %s
-                )
-            """
-            params.extend([kw, kw, kw])
+            words = [w.strip().lower() for w in keyword.split() if w.strip()]
+
+            if words:
+                query += " AND ("
+                search_parts = []
+
+                for word in words:
+                    search_parts.append("""
+                        LOWER(j.title) LIKE %s
+                        OR LOWER(j.description) LIKE %s
+                        OR LOWER(j.keywords) LIKE %s
+                    """)
+                    kw = f"%{word}%"
+                    params.extend([kw, kw, kw])
+
+                query += " OR ".join(f"({part})" for part in search_parts)
+                query += ")"
 
         # Career Area dropdown
         if career_area:
